@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lil' Imperials Contest | The Imperial Apron</title>
+
+<!-- Default Open Graph / Social Sharing Meta Tags -->
+<meta property="og:title" content="Lil' Imperials Culinary Challenge">
+<meta property="og:description" content="Vote for your favorite young chef in the Lil' Imperials Contest!">
+<meta property="og:image" content="https://theimperialapron.ca/images/events/lil-imperials.webp">
+<meta property="og:type" content="website">
+
 <style>
     :root {
         --gold: #d4af37;
@@ -13,6 +20,8 @@
         --card-bg: #141619;
         --text-light: #f1f1f1;
         --text-muted: #aaaaaa;
+        --success-bg: #1a3821;
+        --success-border: #2e6b3e;
     }
 
     * {
@@ -38,7 +47,7 @@
 
     header h1 {
         color: var(--gold-light);
-        font-size: 2.5rem;
+        font-size: 2.2rem;
         text-transform: uppercase;
         letter-spacing: 2px;
         margin-bottom: 5px;
@@ -46,7 +55,7 @@
 
     header p {
         color: var(--gold);
-        font-size: 1.1rem;
+        font-size: 1.05rem;
         font-weight: 500;
     }
 
@@ -54,6 +63,20 @@
         max-width: 1100px;
         margin: 0 auto;
         padding: 20px;
+    }
+
+    .redirect-banner {
+        display: none;
+        background-color: var(--success-bg);
+        border: 1px solid var(--success-border);
+        color: #85e89d;
+        padding: 15px 20px;
+        border-radius: 8px;
+        text-align: center;
+        margin-bottom: 20px;
+        font-size: 1.05rem;
+        font-weight: 600;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
     }
 
     .hero-banner {
@@ -68,7 +91,7 @@
     }
 
     .hero-img {
-        flex: 1 1 400px;
+        flex: 1 1 350px;
         max-height: 350px;
     }
 
@@ -79,7 +102,7 @@
     }
 
     .hero-content {
-        flex: 1 1 400px;
+        flex: 1 1 350px;
         padding: 30px;
         display: flex;
         flex-direction: column;
@@ -92,20 +115,9 @@
         margin-bottom: 15px;
     }
 
-    .badge {
-        display: inline-block;
-        background: var(--gold);
-        color: #000;
-        font-weight: bold;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        margin-bottom: 10px;
-        width: fit-content;
-    }
-
     .nav-tabs {
         display: flex;
+        flex-wrap: wrap;
         gap: 10px;
         margin-bottom: 25px;
         border-bottom: 1px solid #333;
@@ -113,14 +125,16 @@
     }
 
     .tab-btn {
+        flex: 1 1 auto;
         background: #1c1f24;
         color: var(--text-light);
         border: 1px solid #333;
-        padding: 12px 24px;
+        padding: 12px 20px;
         border-radius: 6px;
         cursor: pointer;
         font-weight: bold;
         transition: 0.3s;
+        text-align: center;
     }
 
     .tab-btn.active, .tab-btn:hover {
@@ -159,7 +173,7 @@
         font-size: 1rem;
     }
 
-    .form-group input:focus, .form-group textarea:focus {
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
         outline: none;
         border-color: var(--gold);
     }
@@ -189,7 +203,7 @@
     /* Entry Cards Grid */
     .entries-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
         gap: 20px;
     }
 
@@ -207,12 +221,16 @@
     }
 
     .entry-video {
+        position: relative;
         width: 100%;
-        height: 200px;
+        padding-top: 56.25%;
         background: #000;
     }
 
     .entry-video iframe {
+        position: absolute;
+        top: 0;
+        left: 0;
         width: 100%;
         height: 100%;
         border: none;
@@ -223,15 +241,15 @@
     }
 
     .entry-title {
-        font-size: 1.2rem;
+        font-size: 1.15rem;
         color: var(--gold-light);
         margin-bottom: 5px;
     }
 
     .entry-author {
-        font-size: 0.9rem;
+        font-size: 0.88rem;
         color: var(--text-muted);
-        margin-bottom: 12px;
+        margin-bottom: 10px;
     }
 
     .vote-bar {
@@ -266,6 +284,7 @@
         border-radius: 4px;
         cursor: pointer;
         font-size: 0.85rem;
+        margin-right: 5px;
     }
 
     .prizes-container {
@@ -289,6 +308,18 @@
         object-fit: contain;
         margin-bottom: 10px;
     }
+
+    @media (max-width: 600px) {
+        header h1 { font-size: 1.6rem; }
+        header p { font-size: 0.95rem; }
+        .container { padding: 12px; }
+        .hero-content { padding: 20px; }
+        .hero-content h2 { font-size: 1.4rem; }
+        .nav-tabs { flex-direction: column; gap: 8px; }
+        .tab-btn { width: 100%; }
+        .entries-grid { grid-template-columns: 1fr; }
+        .prizes-container { grid-template-columns: 1fr 1fr; }
+    }
 </style>
 </head>
 <body>
@@ -299,6 +330,8 @@
 </header>
 
 <div class="container">
+
+    <div id="redirectBanner" class="redirect-banner"></div>
 
     <div class="hero-banner">
         <div class="hero-img">
@@ -337,7 +370,6 @@
                 </div>
                 <div class="form-group">
                     <label>Parent / Guardian Email</label>
-                    <input type="text" placeholder="e.g. Jamie" required>
                     <input type="email" name="parentEmail" placeholder="parent@example.com" required>
                 </div>
                 <div class="form-group">
@@ -415,6 +447,13 @@
         if (tabId === 'gallery') loadGallery();
     }
 
+    // Extract YouTube Video ID from embed URL
+    function getYoutubeId(url) {
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const match = url.match(regExp);
+        return (match && match[2].length === 11) ? match[2] : null;
+    }
+
     async function loadGallery() {
         const container = document.getElementById('entriesContainer');
         try {
@@ -426,25 +465,30 @@
                 return;
             }
 
-            container.innerHTML = entries.map(entry => `
-                <div class="entry-card" data-id="${entry._id}">
-                    <div class="entry-video">
-                        <iframe src="${entry.youtubeUrl}" allowfullscreen></iframe>
-                    </div>
-                    <div class="entry-info">
-                        <div class="entry-title">${entry.recipeTitle}</div>
-                        <div class="entry-author">Chef ${entry.childName} • ${entry.province}</div>
-                        <p style="font-size: 0.85rem; color: #aaa; margin-bottom: 10px;">${entry.recipeDescription}</p>
-                        <div class="vote-bar">
-                            <span class="vote-count" id="votes-${entry._id}">${entry.votes} Votes</span>
-                            <div>
-                                <button class="btn-share" onclick="shareEntry('${entry._id}', '${entry.recipeTitle}')">Share</button>
-                                <button class="btn-vote" onclick="castVote('${entry._id}')">Vote</button>
+            container.innerHTML = entries.map(entry => {
+                const videoId = getYoutubeId(entry.youtubeUrl);
+                const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : '';
+
+                return `
+                    <div class="entry-card" data-id="${entry._id}">
+                        <div class="entry-video">
+                            <iframe src="${entry.youtubeUrl}" allowfullscreen></iframe>
+                        </div>
+                        <div class="entry-info">
+                            <div class="entry-title">${entry.recipeTitle}</div>
+                            <div class="entry-author">Chef ${entry.childName} • ${entry.province}</div>
+                            <p style="font-size: 0.85rem; color: #aaa; margin-bottom: 10px;">${entry.recipeDescription}</p>
+                            <div class="vote-bar">
+                                <span class="vote-count" id="votes-${entry._id}">${entry.votes} Votes</span>
+                                <div>
+                                    <button class="btn-share" onclick="shareEntry('${entry._id}', '${entry.recipeTitle}', '${thumbnailUrl}')">Share</button>
+                                    <button class="btn-vote" onclick="castVote('${entry._id}')">Vote</button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         } catch (err) {
             console.error('Gallery load error:', err);
             container.innerHTML = '<p style="color: red; grid-column: 1/-1;">Failed to load entries from server.</p>';
@@ -493,7 +537,18 @@
             if (res.ok && data.success) {
                 const voteEl = document.getElementById('votes-' + entryId);
                 if (voteEl) voteEl.innerText = data.votes + ' Votes';
-                alert('Thank you for voting!');
+
+                const banner = document.getElementById('redirectBanner');
+                if (banner) {
+                    banner.innerText = "Thank you for voting! Redirecting to theimperialapron.ca in 3 seconds...";
+                    banner.style.display = 'block';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+
+                setTimeout(() => {
+                    window.location.href = "https://theimperialapron.ca";
+                }, 3000);
+
             } else {
                 alert(data.error || 'Voting failed.');
             }
@@ -502,8 +557,10 @@
         }
     }
 
-    function shareEntry(entryId, title) {
+    // Enhanced Share function with Video Thumbnail support
+    function shareEntry(entryId, title, thumbnailUrl) {
         const shareUrl = window.location.origin + '?entry=' + entryId;
+        
         if (navigator.share) {
             navigator.share({
                 title: 'Vote for ' + title + ' in Lil\' Imperials Contest!',
