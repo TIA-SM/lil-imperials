@@ -40,8 +40,14 @@ const VoteLogSchema = new mongoose.Schema({
 const Entry = mongoose.model('Entry', EntrySchema);
 const VoteLog = mongoose.model('VoteLog', VoteLogSchema);
 
+// Ensure temporary uploads directory exists for Render / Linux hosts
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
 // Multer setup for temp uploads
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: uploadDir });
 
 // 2. YouTube OAuth2 Setup
 const oauth2Client = new google.auth.OAuth2(
@@ -49,6 +55,18 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_SECRET,
   process.env.REDIRECT_URI
 );
+
+// Load previously stored tokens from disk if present
+const TOKEN_PATH = path.join(__dirname, 'tokens.json');
+if (fs.existsSync(TOKEN_PATH)) {
+  try {
+    const tokens = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+    oauth2Client.setCredentials(tokens);
+    console.log('✅ Loaded YouTube OAuth tokens from tokens.json');
+  } catch (err) {
+    console.error('⚠️ Could not load saved tokens.json:', err);
+  }
+}
 
 // Admin Auth Route - Visit once to grant YouTube permissions
 app.get('/admin/auth', (req, res) => {
@@ -64,10 +82,17 @@ app.get('/admin/auth', (req, res) => {
 app.get('/oauth2callback', async (req, res) => {
   try {
     const { code } = req.query;
+    if (!code) {
+      return res.status(400).send('No authorization code provided.');
+    }
+
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
-    
-    console.log('✅ YouTube Authorized Successfully!');
+
+    // Persist tokens to tokens.json file
+    fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
+    console.log('✅ YouTube Authorized Successfully & Tokens Saved!');
+
     res.send('<h2>YouTube Authentication Successful!</h2><p>Your server can now accept video uploads to YouTube.</p>');
   } catch (err) {
     console.error('OAuth Callback Error:', err);
@@ -101,13 +126,15 @@ app.post('/api/submit', upload.single('video'), async (req, res) => {
       },
     });
 
-    // Clean up temporary local file
-    fs.unlinkSync(videoFile.path);
+    // Clean up temporary local file after upload finishes
+    if (fs.existsSync(videoFile.path)) {
+      fs.unlinkSync(videoFile.path);
+    }
 
     const videoId = ytResponse.data.id;
     const youtubeUrl = `https://www.youtube.com/embed/${videoId}`;
 
-    // Save to MongoDB
+    // Save entry to MongoDB
     const newEntry = new Entry({
       childName,
       parentEmail,
@@ -123,6 +150,12 @@ app.post('/api/submit', upload.single('video'), async (req, res) => {
 
   } catch (error) {
     console.error('Upload Error:', error);
+
+    // Clean up temporary local file if an error occurs during processing
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
     res.status(500).json({ error: 'Failed to process video submission.' });
   }
 });
@@ -155,6 +188,11 @@ app.post('/api/vote/:id', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Voting failed.' });
   }
+});
+
+// Serve index.html for root fallback
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Start Server
