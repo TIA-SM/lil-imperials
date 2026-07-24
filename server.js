@@ -53,15 +53,23 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
-// Load previously stored tokens from disk if present
-const TOKEN_PATH = path.join(__dirname, 'tokens.json');
-if (fs.existsSync(TOKEN_PATH)) {
-  try {
-    const tokens = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
-    oauth2Client.setCredentials(tokens);
-    console.log('✅ Loaded YouTube OAuth tokens from tokens.json');
-  } catch (err) {
-    console.error('⚠️ Could not load saved tokens.json:', err);
+// Automatically set credentials from Render Environment Variable
+if (process.env.YOUTUBE_REFRESH_TOKEN) {
+  oauth2Client.setCredentials({
+    refresh_token: process.env.YOUTUBE_REFRESH_TOKEN
+  });
+  console.log('✅ YouTube OAuth credentials loaded from environment variables.');
+} else {
+  // Local fallback if running on your machine
+  const TOKEN_PATH = path.join(__dirname, 'tokens.json');
+  if (fs.existsSync(TOKEN_PATH)) {
+    try {
+      const tokens = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+      oauth2Client.setCredentials(tokens);
+      console.log('✅ Loaded YouTube OAuth tokens from tokens.json');
+    } catch (err) {
+      console.error('⚠️ Could not load tokens.json:', err);
+    }
   }
 }
 
