@@ -71,12 +71,12 @@ if (fs.existsSync(TOKEN_PATH)) {
 
 // Admin Auth Route - Visit once to grant YouTube permissions
 app.get('/admin/auth', (req, res) => {
-  const url = oauth2Client.generateAuthUrl({
+  const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
-    prompt: 'consent',
-    scope: ['https://www.googleapis.com/auth/youtube.upload']
+    scope: ['https://www.googleapis.com/auth/youtube.upload'],
+    prompt: 'consent' // <-- THIS FORCES GOOGLE TO SEND A NEW REFRESH TOKEN
   });
-  res.redirect(url);
+  res.redirect(authUrl);
 });
 
 // OAuth Callback Route
