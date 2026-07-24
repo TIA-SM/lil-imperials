@@ -191,7 +191,8 @@ app.post('/api/vote/:id', async (req, res) => {
 // -------------------------------------------------------------------
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('*', (req, res) => {
+// SPA Catch-all Fallback (Express 4/5 compatible)
+app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
