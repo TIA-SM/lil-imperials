@@ -81,22 +81,21 @@ app.get('/admin/auth', (req, res) => {
 
 // OAuth Callback Route
 app.get('/oauth2callback', async (req, res) => {
+  const { code } = req.query;
   try {
-    const { code } = req.query;
-    if (!code) {
-      return res.status(400).send('No authorization code provided.');
-    }
-
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
+    
+    // SAVE TO FILE
+    fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
 
-    fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
-    console.log('✅ YouTube Authorized Successfully & Tokens Saved!');
+    // PRINT REFRESH TOKEN TO LOGS SO YOU CAN COPY IT
+    console.log('🔑 YOUR REFRESH TOKEN:', tokens.refresh_token);
 
-    res.send('<h2>YouTube Authentication Successful!</h2><p>Your server can now accept video uploads to YouTube.</p>');
-  } catch (err) {
-    console.error('OAuth Callback Error:', err);
-    res.status(500).send('Authentication failed.');
+    res.send('<h1>YouTube Authentication Successful!</h1><p>Your server can now accept video uploads to YouTube.</p>');
+  } catch (error) {
+    console.error('Error retrieving access token', error);
+    res.status(500).send('Authentication failed');
   }
 });
 
