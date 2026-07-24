@@ -11,9 +11,6 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Serve static files from the 'public' directory
-app.use(express.static(path.join(__dirname, 'public')));
-
 // 1. Connect to MongoDB Atlas
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB Atlas'))
@@ -40,7 +37,7 @@ const VoteLogSchema = new mongoose.Schema({
 const Entry = mongoose.model('Entry', EntrySchema);
 const VoteLog = mongoose.model('VoteLog', VoteLogSchema);
 
-// Ensure temporary uploads directory exists for Render / Linux hosts
+// Ensure temporary uploads directory exists
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -68,6 +65,10 @@ if (fs.existsSync(TOKEN_PATH)) {
   }
 }
 
+// -------------------------------------------------------------------
+// API & OAUTH ROUTES MUST BE DEFINED BEFORE STATIC MIDDLEWARE
+// -------------------------------------------------------------------
+
 // Admin Auth Route - Visit once to grant YouTube permissions
 app.get('/admin/auth', (req, res) => {
   const url = oauth2Client.generateAuthUrl({
@@ -89,7 +90,6 @@ app.get('/oauth2callback', async (req, res) => {
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
 
-    // Persist tokens to tokens.json file
     fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
     console.log('✅ YouTube Authorized Successfully & Tokens Saved!');
 
@@ -100,7 +100,7 @@ app.get('/oauth2callback', async (req, res) => {
   }
 });
 
-// 3. API Route: Form Submission & Video Upload
+// API Route: Form Submission & Video Upload
 app.post('/api/submit', upload.single('video'), async (req, res) => {
   try {
     const { childName, parentEmail, province, recipeTitle, recipeDescription } = req.body;
@@ -108,7 +108,6 @@ app.post('/api/submit', upload.single('video'), async (req, res) => {
 
     if (!videoFile) return res.status(400).json({ error: 'No video uploaded.' });
 
-    // Upload to YouTube as Unlisted
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     const ytResponse = await youtube.videos.insert({
       part: 'snippet,status',
@@ -126,7 +125,6 @@ app.post('/api/submit', upload.single('video'), async (req, res) => {
       },
     });
 
-    // Clean up temporary local file after upload finishes
     if (fs.existsSync(videoFile.path)) {
       fs.unlinkSync(videoFile.path);
     }
@@ -134,7 +132,6 @@ app.post('/api/submit', upload.single('video'), async (req, res) => {
     const videoId = ytResponse.data.id;
     const youtubeUrl = `https://www.youtube.com/embed/${videoId}`;
 
-    // Save entry to MongoDB
     const newEntry = new Entry({
       childName,
       parentEmail,
@@ -151,7 +148,6 @@ app.post('/api/submit', upload.single('video'), async (req, res) => {
   } catch (error) {
     console.error('Upload Error:', error);
 
-    // Clean up temporary local file if an error occurs during processing
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
@@ -160,7 +156,7 @@ app.post('/api/submit', upload.single('video'), async (req, res) => {
   }
 });
 
-// 4. API Route: Fetch Approved Gallery Entries
+// API Route: Fetch Approved Gallery Entries
 app.get('/api/entries', async (req, res) => {
   try {
     const entries = await Entry.find({ status: 'Approved' }).sort({ createdAt: -1 });
@@ -170,7 +166,7 @@ app.get('/api/entries', async (req, res) => {
   }
 });
 
-// 5. API Route: Secure Server-side Voting
+// API Route: Secure Server-side Voting
 app.post('/api/vote/:id', async (req, res) => {
   const entryId = req.params.id;
   const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
@@ -190,7 +186,11 @@ app.post('/api/vote/:id', async (req, res) => {
   }
 });
 
-// Serve index.html for root fallback
+// -------------------------------------------------------------------
+// STATIC FILES AND FALLBACK ROUTE MUST BE AT THE VERY BOTTOM
+// -------------------------------------------------------------------
+app.use(express.static(path.join(__dirname, 'public')));
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
