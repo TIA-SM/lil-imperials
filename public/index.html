@@ -612,18 +612,25 @@
         }
     }
 
-    // Enhanced Share function with Video Thumbnail support
-    function shareEntry(entryId, title, thumbnailUrl) {
-        const shareUrl = window.location.origin + '?entry=' + entryId;
-        
+    // Fixed Enhanced Share function
+    function shareEntry(entryId, title) {
+        // Point the shared link to your main domain or current origin cleanly
+        const shareUrl = "https://theimperialapron.ca/?entry=" + entryId;
+        const shareText = `Vote for "${title}" in the Lil' Imperials Culinary Challenge! Cast your vote here:`;
+
         if (navigator.share) {
+            // Many mobile apps (like Messenger) require the URL to be explicitly passed 
+            // alongside text in a way that respects mobile intent constraints.
             navigator.share({
-                title: 'Vote for ' + title + ' in Lil\' Imperials Contest!',
-                text: 'Check out this awesome cooking entry and vote on theimperialapron.ca!',
+                title: 'Lil\' Imperials Contest',
+                text: shareText,
                 url: shareUrl
-            }).catch(console.error);
+            }).catch((error) => {
+                console.log('Share canceled or failed:', error);
+            });
         } else {
-            navigator.clipboard.writeText(shareUrl).then(() => {
+            // Fallback for desktop/browsers without native share
+            navigator.clipboard.writeText(`${shareText} ${shareUrl}`).then(() => {
                 alert('Entry link copied to clipboard!');
             }).catch(err => {
                 alert('Could not copy link to clipboard.');
