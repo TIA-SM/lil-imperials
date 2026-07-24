@@ -74,7 +74,7 @@ app.get('/admin/auth', (req, res) => {
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: ['https://www.googleapis.com/auth/youtube.upload'],
-    prompt: 'consent' // <-- THIS FORCES GOOGLE TO SEND A NEW REFRESH TOKEN
+    prompt: 'consent' // Forces Google to issue a new refresh token without revoking permissions
   });
   res.redirect(authUrl);
 });
@@ -86,13 +86,10 @@ app.get('/oauth2callback', async (req, res) => {
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
     
-    // SAVE TO FILE
-    fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
+    // THIS LINE PRINTS THE TOKEN TO YOUR RENDER LOGS
+    console.log('🔑 YOUR REFRESH TOKEN IS:', tokens.refresh_token);
 
-    // PRINT REFRESH TOKEN TO LOGS SO YOU CAN COPY IT
-    console.log('🔑 YOUR REFRESH TOKEN:', tokens.refresh_token);
-
-    res.send('<h1>YouTube Authentication Successful!</h1><p>Your server can now accept video uploads to YouTube.</p>');
+    res.send('<h1>YouTube Authentication Successful!</h1><p>Check your Render logs to copy the refresh token.</p>');
   } catch (error) {
     console.error('Error retrieving access token', error);
     res.status(500).send('Authentication failed');
