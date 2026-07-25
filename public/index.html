@@ -411,6 +411,7 @@
                 </div>
                 <div class="form-group">
                     <label>Parent / Guardian Email</label>
+                    <input type="text" placeholder="e.g. Jamie" required>
                     <input type="email" name="parentEmail" placeholder="parent@example.com" required>
                 </div>
                 <div class="form-group">
@@ -620,9 +621,10 @@
         }
     }
 
-    // Enhanced Share Function for Mobile Apps (Facebook Messenger, etc.)
+    // Dynamic Share Function for Mobile Apps (Facebook Messenger, etc.)
     function shareEntry(entryId, title) {
-        const shareUrl = "https://lil-imperials.onrender.com/?entry=" + entryId;
+        const baseUrl = window.location.origin;
+        const shareUrl = `${baseUrl}/?entry=${entryId}`;
         const shareText = `Vote for "${title}" in the Lil' Imperials Culinary Challenge! Cast your vote here:`;
 
         if (navigator.share) {
