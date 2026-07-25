@@ -593,9 +593,23 @@
         }
     }
 
+    // Helper to generate or retrieve a persistent anonymous browser token
+    function getVoterToken() {
+        let token = localStorage.getItem('ia_voter_token');
+        if (!token) {
+            token = 'tok_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+            localStorage.setItem('ia_voter_token', token);
+        }
+        return token;
+    }
+
     async function castVote(entryId) {
         try {
-            const res = await fetch(`/api/vote/${entryId}`, { method: 'POST' });
+            const res = await fetch(`/api/vote/${entryId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ voterToken: getVoterToken() })
+            });
             const data = await res.json();
 
             if (res.ok && data.success) {
