@@ -212,7 +212,7 @@
         border: 1px solid #2a2e35;
         border-radius: 10px;
         overflow: hidden;
-        transition: transform 0.2s;
+        transition: transform 0.2s, border-color 0.3s, box-shadow 0.3s;
     }
 
     .entry-card:hover {
@@ -411,7 +411,6 @@
                 </div>
                 <div class="form-group">
                     <label>Parent / Guardian Email</label>
-                    <input type="text" placeholder="e.g. Jamie" required>
                     <input type="email" name="parentEmail" placeholder="parent@example.com" required>
                 </div>
                 <div class="form-group">
@@ -486,7 +485,19 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        loadGallery();
+        loadGallery().then(() => {
+            // Check if URL has an entry parameter to auto-scroll and highlight it
+            const urlParams = new URLSearchParams(window.location.search);
+            const targetEntryId = urlParams.get('entry');
+            if (targetEntryId) {
+                const card = document.querySelector(`[data-id="${targetEntryId}"]`);
+                if (card) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    card.style.borderColor = 'var(--gold)';
+                    card.style.boxShadow = '0 0 25px rgba(212, 175, 55, 0.5)';
+                }
+            }
+        });
     });
 
     function switchTab(tabId) {
@@ -521,9 +532,6 @@
             }
 
             container.innerHTML = entries.map(entry => {
-                const videoId = getYoutubeId(entry.youtubeUrl);
-                const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : '';
-
                 return `
                     <div class="entry-card" data-id="${entry._id}">
                         <div class="entry-video">
@@ -536,7 +544,7 @@
                             <div class="vote-bar">
                                 <span class="vote-count" id="votes-${entry._id}">${entry.votes} Votes</span>
                                 <div>
-                                    <button class="btn-share" onclick="shareEntry('${entry._id}', '${entry.recipeTitle}', '${thumbnailUrl}')">Share</button>
+                                    <button class="btn-share" onclick="shareEntry('${entry._id}', '${entry.recipeTitle}')">Share</button>
                                     <button class="btn-vote" onclick="castVote('${entry._id}')">Vote</button>
                                 </div>
                             </div>
@@ -612,15 +620,12 @@
         }
     }
 
-    // Fixed Enhanced Share function
+    // Enhanced Share Function for Mobile Apps (Facebook Messenger, etc.)
     function shareEntry(entryId, title) {
-        // Point the shared link to your main domain or current origin cleanly
         const shareUrl = "https://theimperialapron.ca/?entry=" + entryId;
         const shareText = `Vote for "${title}" in the Lil' Imperials Culinary Challenge! Cast your vote here:`;
 
         if (navigator.share) {
-            // Many mobile apps (like Messenger) require the URL to be explicitly passed 
-            // alongside text in a way that respects mobile intent constraints.
             navigator.share({
                 title: 'Lil\' Imperials Contest',
                 text: shareText,
