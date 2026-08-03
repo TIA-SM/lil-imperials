@@ -109,9 +109,11 @@ if (process.env.YOUTUBE_REFRESH_TOKEN) {
   console.log('✅ YouTube OAuth credentials loaded from environment variables.');
 }
 
-// Routes
+// ============================================================================
+// ROUTES SECTION (API & ADMIN ROUTES MUST BE DEFINED FIRST)
+// ============================================================================
 
-// Version Check Route: Visit https://your-app.onrender.com/api/version to confirm the active deployment
+// Version Check Route: Visit https://your-app.onrender.com/api/version to confirm active deployment
 app.get('/api/version', (req, res) => {
   res.json({ success: true, version: SERVER_VERSION, message: 'Running latest strict anti-cheat vote server.' });
 });
@@ -208,7 +210,6 @@ app.post('/api/admin/boost/:id', async (req, res) => {
   const entryId = req.params.id;
   const { secretKey, voteAmount } = req.body;
 
-  // Simple admin protection check using an environment variable
   if (!process.env.ADMIN_SECRET || secretKey !== process.env.ADMIN_SECRET) {
     return res.status(401).json({ success: false, error: 'Unauthorized. Invalid admin secret key.' });
   }
@@ -246,20 +247,15 @@ app.post('/api/vote/:id', async (req, res) => {
     clientIp = clientIp.substring(7);
   }
 
-  // Accept optional browser client token sent from frontend script
   const browserToken = req.body.voterToken || '';
-  
-  // Combine browser token and IP address to create a unique identifier for this device
   const uniqueVoterIdentifier = browserToken ? `${clientIp}_${browserToken}` : clientIp;
 
   try {
-    // Check if this device/IP has ALREADY voted for ANY entry in the contest
     const existingVote = await VoteLog.findOne({ identifier: uniqueVoterIdentifier });
     if (existingVote) {
       return res.status(400).json({ success: false, error: 'You have already cast your single vote for this contest from this device.' });
     }
 
-    // Log the vote globally for this identifier
     await VoteLog.create({ identifier: uniqueVoterIdentifier });
     const updatedEntry = await Entry.findByIdAndUpdate(entryId, { $inc: { votes: 1 } }, { new: true });
 
@@ -269,7 +265,6 @@ app.post('/api/vote/:id', async (req, res) => {
 
     res.json({ success: true, votes: updatedEntry.votes });
   } catch (error) {
-    // Handle database duplicate key error cleanly if concurrent requests happen
     if (error.code === 11000) {
       return res.status(400).json({ success: false, error: 'You have already cast your single vote for this contest from this device.' });
     }
@@ -278,6 +273,11 @@ app.post('/api/vote/:id', async (req, res) => {
   }
 });
 
+
+// ============================================================================
+// STATIC FILES & SPA FALLBACK (MUST BE PLACED AFTER ALL API ROUTES)
+// ============================================================================
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Dynamic Social Preview & SPA Catch-All Route
@@ -285,14 +285,12 @@ app.get('*', async (req, res) => {
   const entryId = req.query.entry;
   const filePath = path.join(__dirname, 'public', 'index.html');
 
-  // If someone shared a specific entry link, fetch it to customize social meta tags
   if (entryId && mongoose.Types.ObjectId.isValid(entryId)) {
     try {
       const entry = await Entry.findById(entryId);
       if (entry) {
         let html = fs.readFileSync(filePath, 'utf8');
         
-        // Extract YouTube Video ID for the thumbnail preview
         const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
         const match = entry.youtubeUrl ? entry.youtubeUrl.match(regExp) : null;
         const videoId = (match && match[2].length === 11) ? match[2] : null;
@@ -301,7 +299,6 @@ app.get('*', async (req, res) => {
         const safeTitle = `Vote for Chef ${entry.childName}: ${entry.recipeTitle}`;
         const safeDesc = `${entry.recipeDescription} - Click to watch and cast your vote in the Lil' Imperials Challenge!`;
 
-        // Replace default Open Graph meta tags with the specific entry data
         html = html.replace(/<meta property="og:title" content="[^"]*">/, `<meta property="og:title" content="${safeTitle}">`);
         html = html.replace(/<meta property="og:description" content="[^"]*">/, `<meta property="og:description" content="${safeDesc}">`);
         html = html.replace(/<meta property="og:image" content="[^"]*">/, `<meta property="og:image" content="${thumbnailUrl}">`);
@@ -314,7 +311,6 @@ app.get('*', async (req, res) => {
     }
   }
 
-  // Default fallback if no entry ID is present
   res.sendFile(filePath);
 });
 
