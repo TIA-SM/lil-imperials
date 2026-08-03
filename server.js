@@ -281,7 +281,7 @@ app.post('/api/vote/:id', async (req, res) => {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Dynamic Social Preview & SPA Catch-All Route
-app.get('/*', async (req, res) => {
+app.get(/.*/, async (req, res) => {
   const entryId = req.query.entry;
   const filePath = path.join(__dirname, 'public', 'index.html');
 
