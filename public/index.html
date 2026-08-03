@@ -486,8 +486,12 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
+        // Check if the user has already voted during this session/browser profile
+        if (localStorage.getItem('ia_has_voted') === 'true') {
+            disableAllVoting("You have already cast your vote.");
+        }
+
         loadGallery().then(() => {
-            // Check if URL has an entry parameter to auto-scroll and highlight it
             const urlParams = new URLSearchParams(window.location.search);
             const targetEntryId = urlParams.get('entry');
             if (targetEntryId) {
@@ -514,7 +518,6 @@
         if (tabId === 'gallery') loadGallery();
     }
 
-    // Extract YouTube Video ID from embed URL
     function getYoutubeId(url) {
         const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
         const match = url.match(regExp);
@@ -532,6 +535,8 @@
                 return;
             }
 
+            const hasVoted = localStorage.getItem('ia_has_voted') === 'true';
+
             container.innerHTML = entries.map(entry => {
                 return `
                     <div class="entry-card" data-id="${entry._id}">
@@ -546,7 +551,7 @@
                                 <span class="vote-count" id="votes-${entry._id}">${entry.votes} Votes</span>
                                 <div>
                                     <button class="btn-share" onclick="shareEntry('${entry._id}', '${entry.recipeTitle}')">Share</button>
-                                    <button class="btn-vote" onclick="castVote('${entry._id}')">Vote</button>
+                                    <button class="btn-vote" onclick="castVote('${entry._id}')" ${hasVoted ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>Vote</button>
                                 </div>
                             </div>
                         </div>
@@ -593,7 +598,6 @@
         }
     }
 
-    // Helper to generate or retrieve a persistent anonymous browser token
     function getVoterToken() {
         let token = localStorage.getItem('ia_voter_token');
         if (!token) {
@@ -603,7 +607,30 @@
         return token;
     }
 
+    function disableAllVoting(message) {
+        localStorage.setItem('ia_has_voted', 'true');
+        
+        document.querySelectorAll('.btn-vote').forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+            btn.innerText = 'Voted';
+        });
+
+        const banner = document.getElementById('redirectBanner');
+        if (banner) {
+            banner.innerText = message;
+            banner.style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }
+
     async function castVote(entryId) {
+        if (localStorage.getItem('ia_has_voted') === 'true') {
+            alert('You have already cast your vote.');
+            return;
+        }
+
         try {
             const res = await fetch(`/api/vote/${entryId}`, {
                 method: 'POST',
@@ -616,12 +643,7 @@
                 const voteEl = document.getElementById('votes-' + entryId);
                 if (voteEl) voteEl.innerText = data.votes + ' Votes';
 
-                const banner = document.getElementById('redirectBanner');
-                if (banner) {
-                    banner.innerText = "Thank you for voting! Redirecting to theimperialapron.ca in 3 seconds...";
-                    banner.style.display = 'block';
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
+                disableAllVoting("Thank you for voting! Redirecting to theimperialapron.ca in 3 seconds...");
 
                 setTimeout(() => {
                     window.location.href = "https://theimperialapron.ca";
@@ -629,13 +651,15 @@
 
             } else {
                 alert(data.error || 'Voting failed.');
+                if (data.error && data.error.toLowerCase().includes('already voted')) {
+                    disableAllVoting("You have already cast your vote.");
+                }
             }
         } catch (err) {
             alert('Server error processing vote.');
         }
     }
 
-    // Dynamic Share Function for Mobile Apps (Facebook Messenger, etc.)
     function shareEntry(entryId, title) {
         const baseUrl = window.location.origin;
         const shareUrl = `${baseUrl}/?entry=${entryId}`;
@@ -650,7 +674,6 @@
                 console.log('Share canceled or failed:', error);
             });
         } else {
-            // Fallback for desktop/browsers without native share
             navigator.clipboard.writeText(`${shareText} ${shareUrl}`).then(() => {
                 alert('Entry link copied to clipboard!');
             }).catch(err => {
