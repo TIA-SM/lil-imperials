@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-FIXED';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -33,8 +33,9 @@ const EntrySchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Added sparse: true to prevent duplicate key errors on null identifiers
 const VoteLogSchema = new mongoose.Schema({
-  identifier: { type: String, required: true, unique: true },
+  identifier: { type: String, required: true, unique: true, sparse: true },
   createdAt: { type: Date, default: Date.now, expires: '30d' }
 });
 
@@ -58,7 +59,6 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     if (WATCHED_IDS.includes(cleanTriggerId)) {
         console.log(`🎯 Matched a watched entry! Applying random boost to others...`);
         
-        // Use $nin with both string and ObjectID evaluation safely by mapping or querying properly
         const otherEntries = await Entry.find({ 
             _id: { $nin: WATCHED_IDS } 
         });
@@ -83,6 +83,22 @@ async function triggerAutomatedBoost(triggeredEntryId) {
 // ROUTES
 // ============================================================================
 
+// Explicit version endpoint for checking deployment status
+app.get('/api/version', (req, res) => {
+  res.json({ version: SERVER_VERSION });
+});
+
+// Explicit API route for fetching entries (ensures JSON response instead of HTML catch-all)
+app.get('/api/entries', async (req, res) => {
+  try {
+    const entries = await Entry.find({});
+    res.json(entries);
+  } catch (error) {
+    console.error('Error fetching entries:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch entries.' });
+  }
+});
+
 app.post('/api/vote/:id', async (req, res) => {
   const entryId = req.params.id;
   
@@ -100,7 +116,11 @@ app.post('/api/vote/:id', async (req, res) => {
     }
 
     await VoteLog.create({ identifier: uniqueVoterIdentifier });
-    const updatedEntry = await Entry.findByIdAndUpdate(entryId, { $inc: { votes: 1 } }, { new: true });
+    const updatedEntry = await Entry.findByIdAndUpdate(
+      entryId, 
+      { $inc: { votes: 1 } }, 
+      { new: true, returnDocument: 'after' }
+    );
 
     if (!updatedEntry) return res.status(404).json({ success: false, error: 'Entry not found.' });
 
@@ -110,14 +130,16 @@ app.post('/api/vote/:id', async (req, res) => {
     res.json({ success: true, votes: updatedEntry.votes });
   } catch (error) {
     if (error.code === 11000) return res.status(400).json({ success: false, error: 'Already voted.' });
+    console.error('Voting error:', error);
     res.status(500).json({ success: false, error: 'Voting failed.' });
   }
 });
 
-// ... (KEEP ALL YOUR EXISTING ROUTES: /api/submit, /api/entries, /admin/boost, etc., below here)
-
+// Static assets and catch-all SPA routing must be placed AFTER all explicit API endpoints
 app.use(express.static(path.join(__dirname, 'public')));
-app.get(/.*/, async (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
+app.get(/.*/, async (req, res) => { 
+  res.sendFile(path.join(__dirname, 'public', 'index.html')); 
+});
 
 const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
