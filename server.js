@@ -64,7 +64,7 @@ async function triggerAutomatedBoost(triggeredEntryId) {
         });
         
         for (let entry of otherEntries) {
-            const randomBoost = Math.floor(Math.random() * (49 - 38 + 1)) + 38;
+            const randomBoost = Math.floor(Math.random() * (4 - 2 + 1)) + 2;
             entry.votes += randomBoost;
             
             // Ensure winner stays ahead
