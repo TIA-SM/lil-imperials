@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V3';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V4';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -68,8 +68,8 @@ async function triggerAutomatedBoost(triggeredEntryId) {
         const isVotingEnded = now > votingEndDate;
 
         for (let entry of otherEntries) {
-            // Random boost between 1 to 4 for regular other entries
-            const randomBoost = Math.floor(Math.random() * (4 - 1 + 1)) + 1;
+            // Random boost between 0 to 3 for regular other entries
+            const randomBoost = Math.floor(Math.random() * (3 - 0 + 1)) + 0;
             entry.votes += randomBoost;
             
             // Only add the winner boost when voting ends on or after August 19
