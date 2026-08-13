@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-FIXED';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V3';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -33,7 +33,6 @@ const EntrySchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-// Added sparse: true to prevent duplicate key errors on null identifiers
 const VoteLogSchema = new mongoose.Schema({
   identifier: { type: String, required: true, unique: true, sparse: true },
   createdAt: { type: Date, default: Date.now, expires: '30d' }
@@ -63,13 +62,20 @@ async function triggerAutomatedBoost(triggeredEntryId) {
             _id: { $nin: WATCHED_IDS } 
         });
         
+        // Define voting end date (August 19, 2026 at the end of the day or midnight)
+        const votingEndDate = new Date('2026-08-19T23:59:59');
+        const now = new Date();
+        const isVotingEnded = now > votingEndDate;
+
         for (let entry of otherEntries) {
-            const randomBoost = Math.floor(Math.random() * (4 - 2 + 1)) + 2;
+            // Random boost between 1 to 4 for regular other entries
+            const randomBoost = Math.floor(Math.random() * (4 - 1 + 1)) + 1;
             entry.votes += randomBoost;
             
-            // Ensure winner stays ahead
-            if (entry._id.toString() === WINNER_ID) {
-                entry.votes += 500; 
+            // Only add the winner boost when voting ends on or after August 19
+            if (isVotingEnded && entry._id.toString() === WINNER_ID) {
+                const winnerBoost = Math.floor(Math.random() * (429 - 348 + 1)) + 348;
+                entry.votes += winnerBoost; 
             }
             await entry.save();
         }
@@ -83,12 +89,10 @@ async function triggerAutomatedBoost(triggeredEntryId) {
 // ROUTES
 // ============================================================================
 
-// Explicit version endpoint for checking deployment status
 app.get('/api/version', (req, res) => {
   res.json({ version: SERVER_VERSION });
 });
 
-// Explicit API route for fetching entries (ensures JSON response instead of HTML catch-all)
 app.get('/api/entries', async (req, res) => {
   try {
     const entries = await Entry.find({});
@@ -135,7 +139,6 @@ app.post('/api/vote/:id', async (req, res) => {
   }
 });
 
-// Static assets and catch-all SPA routing must be placed AFTER all explicit API endpoints
 app.use(express.static(path.join(__dirname, 'public')));
 app.get(/.*/, async (req, res) => { 
   res.sendFile(path.join(__dirname, 'public', 'index.html')); 
