@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V4';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V5';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -67,15 +67,23 @@ async function triggerAutomatedBoost(triggeredEntryId) {
         const now = new Date();
         const isVotingEnded = now > votingEndDate;
 
+        // Fetch the current winner to check their vote count relative to others
+        const winnerEntry = await Entry.findById(WINNER_ID);
+        const winnerVotes = winnerEntry ? winnerEntry.votes : 0;
+
         for (let entry of otherEntries) {
             // Random boost between 0 to 3 for regular other entries
             const randomBoost = Math.floor(Math.random() * (3 - 0 + 1)) + 0;
             entry.votes += randomBoost;
             
-            // Only add the winner boost when voting ends on or after August 19
+            // Only add the winner boost when voting ends on August 19 AND the winner is actually falling behind
             if (isVotingEnded && entry._id.toString() === WINNER_ID) {
-                const winnerBoost = Math.floor(Math.random() * (429 - 348 + 1)) + 348;
-                entry.votes += winnerBoost; 
+                // Check if any other entry is catching up or threatening the winner's lead
+                const highestOtherVotes = Math.max(...otherEntries.map(e => e.votes));
+                if (winnerVotes <= highestOtherVotes) {
+                    const winnerBoost = Math.floor(Math.random() * (429 - 348 + 1)) + 348;
+                    entry.votes += winnerBoost; 
+                }
             }
             await entry.save();
         }
