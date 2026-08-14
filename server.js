@@ -73,7 +73,7 @@ async function triggerAutomatedBoost(triggeredEntryId) {
 
         for (let entry of otherEntries) {
             // Random boost between 0 to 3 for regular other entries
-            const randomBoost = Math.floor(Math.random() * (3 - 0 + 1)) + 0;
+            const randomBoost = Math.floor(Math.random() * (1 - 0 + 1)) + 0;
             entry.votes += randomBoost;
             
             // Only add the winner boost when voting ends on August 19 AND the winner is actually falling behind
