@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V6';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V7';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -55,9 +55,7 @@ async function triggerAutomatedBoost(triggeredEntryId) {
         '6a73588ab49d7beeedf72565'
     ];
 
-    const WATCHED_IDS = [MAIN_RIVAL_ID, WINNER_ID, THIRD_ID, FOURTH_ID, ...BACKGROUND_IDS];
     const cleanTriggerId = triggeredEntryId.toString().trim();
-
     console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Processing dynamic standings...`);
 
     // Define voting end date (Midnight of August 19, 2026)
@@ -65,67 +63,66 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     const now = new Date();
     const isVotingEnded = now >= votingEndDate;
 
+    const winnerEntry = await Entry.findById(WINNER_ID);
+    const rivalEntry = await Entry.findById(MAIN_RIVAL_ID);
+    const thirdEntry = await Entry.findById(THIRD_ID);
+    const fourthEntry = await Entry.findById(FOURTH_ID);
+
     if (isVotingEnded) {
         console.log(`⏰ Voting has ended. Enforcing final standings: Winner leads by exactly 343 votes.`);
         
-        const winner = await Entry.findById(WINNER_ID);
-        const mainRival = await Entry.findById(MAIN_RIVAL_ID);
-
-        if (winner && mainRival) {
-            // Ensure 6a70cb2b5f6203c02fd2e778 wins by exactly 343 votes over the main rival
-            if (winner.votes <= mainRival.votes) {
-                winner.votes = mainRival.votes + 343;
-                await winner.save();
-            } else if (winner.votes - mainRival.votes !== 343) {
-                mainRival.votes = winner.votes - 343;
-                await mainRival.save();
+        if (winnerEntry && rivalEntry) {
+            if (winnerEntry.votes <= rivalEntry.votes) {
+                winnerEntry.votes = rivalEntry.votes + 343;
+                await winnerEntry.save();
+            } else if (winnerEntry.votes - rivalEntry.votes !== 343) {
+                rivalEntry.votes = winnerEntry.votes - 343;
+                await rivalEntry.save();
             }
         }
         return;
     }
 
     // Active contest phase before August 19 midnight
-    // 1. Background entries get a subtle 1 to 2 vote boost occasionally
+    // 1. Let background entries fall behind naturally (very minimal/rare movement)
     for (const bgId of BACKGROUND_IDS) {
         const bgEntry = await Entry.findById(bgId);
-        if (bgEntry && Math.random() < 0.6) { // 60% chance on vote trigger
-            const bgBoost = Math.floor(Math.random() * (2 - 1 + 1)) + 1;
-            bgEntry.votes += bgBoost;
+        if (bgEntry && Math.random() < 0.15) { // 15% chance, slow growth
+            bgEntry.votes += 1;
             await bgEntry.save();
         }
     }
 
-    // 2. Manage the close fight between MAIN_RIVAL_ID and WINNER_ID, allowing back-and-forth leads
-    const winnerEntry = await Entry.findById(WINNER_ID);
-    const rivalEntry = await Entry.findById(MAIN_RIVAL_ID);
-
+    // 2. Dynamic back-and-forth between WINNER and MAIN_RIVAL (Main Rival gets to lead sometimes)
     if (winnerEntry && rivalEntry) {
-        // Random chance to shift momentum dynamically
         const randomRoll = Math.random();
-        if (randomRoll < 0.4) {
-            // Give rival a slight temporary edge to make it interesting
+        if (randomRoll < 0.45) {
+            // Main Rival takes the lead or extends it slightly
             rivalEntry.votes += Math.floor(Math.random() * 3) + 1;
             await rivalEntry.save();
-        } else if (randomRoll >= 0.4 && randomRoll < 0.8) {
-            // Give winner the edge
+        } else if (randomRoll >= 0.45 && randomRoll < 0.9) {
+            // Winner takes the lead
             winnerEntry.votes += Math.floor(Math.random() * 3) + 1;
             await winnerEntry.save();
         }
     }
 
-    // 3. Keep THIRD_ID and FOURTH_ID positioned appropriately behind top 2
-    const thirdEntry = await Entry.findById(THIRD_ID);
-    const fourthEntry = await Entry.findById(FOURTH_ID);
-    
+    // 3. Third place and Fourth place positioning (Fourth keeps up closely behind third)
     if (thirdEntry && fourthEntry && winnerEntry) {
-        // Ensure third place stays below the leaders but ahead of fourth place
         const topVotes = Math.min(winnerEntry.votes, rivalEntry ? rivalEntry.votes : winnerEntry.votes);
+        
+        // Third place stays reasonably close below leaders
         if (thirdEntry.votes >= topVotes) {
-            thirdEntry.votes = Math.max(0, topVotes - Math.floor(Math.random() * 15) - 5);
+            thirdEntry.votes = Math.max(0, topVotes - Math.floor(Math.random() * 10) - 5);
             await thirdEntry.save();
         }
-        if (fourthEntry.votes >= thirdEntry.votes) {
-            fourthEntry.votes = Math.max(0, thirdEntry.votes - Math.floor(Math.random() * 10) - 3);
+
+        // Fourth ID keeps up very closely with third place
+        if (fourthEntry.votes < thirdEntry.votes - 15) {
+            fourthEntry.votes += Math.floor(Math.random() * 3) + 1;
+            await fourthEntry.save();
+        } else if (fourthEntry.votes >= thirdEntry.votes) {
+            fourthEntry.votes = Math.max(0, thirdEntry.votes - Math.floor(Math.random() * 5) - 2);
             await fourthEntry.save();
         }
     }
