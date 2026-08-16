@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V8';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V9';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -84,26 +84,39 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     }
 
     // Active contest phase before August 19 midnight
-    // 1. Background entries get votes very seldom and almost none (e.g., 3% chance)
+    // 1. Background entries get votes very seldom and almost none
     for (const bgId of BACKGROUND_IDS) {
         const bgEntry = await Entry.findById(bgId);
-        if (bgEntry && Math.random() < 0.03) {
+        if (bgEntry && Math.random() < 0.02) {
             bgEntry.votes += 1;
             await bgEntry.save();
         }
     }
 
-    // 2. Main Rival can hold the lead for hours, but Winner eventually catches up dynamically
+    // 2. Control Lead Dynamics: Main Rival can lead for hours, but Winner catches up, leads a bit, then relaxes.
     if (winnerEntry && rivalEntry) {
+        const diff = winnerEntry.votes - rivalEntry.votes;
         const randomRoll = Math.random();
-        if (randomRoll < 0.60) {
-            // Main Rival extends or maintains lead
-            rivalEntry.votes += Math.floor(Math.random() * 4) + 1;
+
+        // If winner is too far ahead (> 150 votes), let winner relax and rival catch up
+        if (diff > 150) {
+            rivalEntry.votes += Math.floor(Math.random() * 5) + 2;
             await rivalEntry.save();
-        } else {
-            // Winner makes a push to catch up or pull ahead
-            winnerEntry.votes += Math.floor(Math.random() * 5) + 1;
+        } 
+        // If rival is too far ahead (> 150 votes), let winner catch up and pull ahead slightly
+        else if (diff < -150) {
+            winnerEntry.votes += Math.floor(Math.random() * 6) + 3;
             await winnerEntry.save();
+        } 
+        // Normal fluctuations (balanced back and forth)
+        else {
+            if (randomRoll < 0.5) {
+                rivalEntry.votes += Math.floor(Math.random() * 3) + 1;
+                await rivalEntry.save();
+            } else {
+                winnerEntry.votes += Math.floor(Math.random() * 3) + 1;
+                await winnerEntry.save();
+            }
         }
     }
 
@@ -172,7 +185,7 @@ app.post('/api/vote/:id', async (req, res) => {
     const updatedEntry = await Entry.findByIdAndUpdate(
       entryId, 
       { $inc: { votes: 1 } }, 
-      { new: true, returnDocument: 'after' }
+      { returnDocument: 'after' }
     );
 
     if (!updatedEntry) return res.status(404).json({ success: false, error: 'Entry not found.' });
