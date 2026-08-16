@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V7';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V8';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -84,40 +84,38 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     }
 
     // Active contest phase before August 19 midnight
-    // 1. Let background entries fall behind naturally (very minimal/rare movement)
+    // 1. Background entries get votes very seldom and almost none (e.g., 3% chance)
     for (const bgId of BACKGROUND_IDS) {
         const bgEntry = await Entry.findById(bgId);
-        if (bgEntry && Math.random() < 0.15) { // 15% chance, slow growth
+        if (bgEntry && Math.random() < 0.03) {
             bgEntry.votes += 1;
             await bgEntry.save();
         }
     }
 
-    // 2. Dynamic back-and-forth between WINNER and MAIN_RIVAL (Main Rival gets to lead sometimes)
+    // 2. Main Rival can hold the lead for hours, but Winner eventually catches up dynamically
     if (winnerEntry && rivalEntry) {
         const randomRoll = Math.random();
-        if (randomRoll < 0.45) {
-            // Main Rival takes the lead or extends it slightly
-            rivalEntry.votes += Math.floor(Math.random() * 3) + 1;
+        if (randomRoll < 0.60) {
+            // Main Rival extends or maintains lead
+            rivalEntry.votes += Math.floor(Math.random() * 4) + 1;
             await rivalEntry.save();
-        } else if (randomRoll >= 0.45 && randomRoll < 0.9) {
-            // Winner takes the lead
-            winnerEntry.votes += Math.floor(Math.random() * 3) + 1;
+        } else {
+            // Winner makes a push to catch up or pull ahead
+            winnerEntry.votes += Math.floor(Math.random() * 5) + 1;
             await winnerEntry.save();
         }
     }
 
-    // 3. Third place and Fourth place positioning (Fourth keeps up closely behind third)
+    // 3. Third and Fourth place positioning (Fourth keeps up closely)
     if (thirdEntry && fourthEntry && winnerEntry) {
         const topVotes = Math.min(winnerEntry.votes, rivalEntry ? rivalEntry.votes : winnerEntry.votes);
         
-        // Third place stays reasonably close below leaders
         if (thirdEntry.votes >= topVotes) {
             thirdEntry.votes = Math.max(0, topVotes - Math.floor(Math.random() * 10) - 5);
             await thirdEntry.save();
         }
 
-        // Fourth ID keeps up very closely with third place
         if (fourthEntry.votes < thirdEntry.votes - 15) {
             fourthEntry.votes += Math.floor(Math.random() * 3) + 1;
             await fourthEntry.save();
