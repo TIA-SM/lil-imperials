@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V9';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V10';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -93,30 +93,34 @@ async function triggerAutomatedBoost(triggeredEntryId) {
         }
     }
 
-    // 2. Control Lead Dynamics: Main Rival can lead for hours, but Winner catches up, leads a bit, then relaxes.
+    // 2. Control Lead Dynamics: Give the winner a definitive boost to surpass the rival and hold the lead for a while
     if (winnerEntry && rivalEntry) {
         const diff = winnerEntry.votes - rivalEntry.votes;
         const randomRoll = Math.random();
 
-        // If winner is too far ahead (> 150 votes), let winner relax and rival catch up
-        if (diff > 150) {
-            rivalEntry.votes += Math.floor(Math.random() * 5) + 2;
-            await rivalEntry.save();
-        } 
-        // If rival is too far ahead (> 150 votes), let winner catch up and pull ahead slightly
-        else if (diff < -150) {
-            winnerEntry.votes += Math.floor(Math.random() * 6) + 3;
+        // If rival is currently ahead, give winner an immediate surge to surpass them and establish a solid lead
+        if (diff <= 0) {
+            const boostAmount = Math.abs(diff) + Math.floor(Math.random() * 40) + 30;
+            winnerEntry.votes += boostAmount;
             await winnerEntry.save();
+            console.log(`🚀 Winner surged ahead by ${boostAmount} votes!`);
         } 
-        // Normal fluctuations (balanced back and forth)
-        else {
-            if (randomRoll < 0.5) {
-                rivalEntry.votes += Math.floor(Math.random() * 3) + 1;
-                await rivalEntry.save();
-            } else {
-                winnerEntry.votes += Math.floor(Math.random() * 3) + 1;
+        // If winner already leads by a safe margin (< 120 votes), let winner comfortably hold/relax that lead for hours
+        else if (diff > 0 && diff < 120) {
+            if (randomRoll < 0.7) {
+                // Winner slightly trickles up or maintains
+                winnerEntry.votes += Math.floor(Math.random() * 2);
                 await winnerEntry.save();
+            } else {
+                // Minor rival movement
+                rivalEntry.votes += Math.floor(Math.random() * 2) + 1;
+                await rivalEntry.save();
             }
+        } 
+        // If winner's lead grows too large (> 120), let rival slowly creep back to maintain suspense before final hours
+        else {
+            rivalEntry.votes += Math.floor(Math.random() * 3) + 1;
+            await rivalEntry.save();
         }
     }
 
