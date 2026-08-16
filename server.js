@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V5';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V6';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -45,52 +45,92 @@ const VoteLog = mongoose.model('VoteLog', VoteLogSchema);
 // AUTOMATED CONTEST LOGIC HELPER
 // ============================================================================
 async function triggerAutomatedBoost(triggeredEntryId) {
-    const WATCHED_IDS = [
-        '6a69441bdd8261c6e326b3eb', 
-        '6a76b16b33ceb77b5cd9e846'
-    ].map(id => id.toString().trim());
-
+    const MAIN_RIVAL_ID = '6a69441bdd8261c6e326b3eb'; 
     const WINNER_ID = '6a70cb2b5f6203c02fd2e778';
+    const THIRD_ID = '6a7d131104a63b63f08a9a26';
+    const FOURTH_ID = '6a76b16b33ceb77b5cd9e846';
+    
+    const BACKGROUND_IDS = [
+        '6a6df32bf63ec8d1ea2ea1f5',
+        '6a73588ab49d7beeedf72565'
+    ];
+
+    const WATCHED_IDS = [MAIN_RIVAL_ID, WINNER_ID, THIRD_ID, FOURTH_ID, ...BACKGROUND_IDS];
     const cleanTriggerId = triggeredEntryId.toString().trim();
 
-    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Checking watched list...`);
+    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Processing dynamic standings...`);
 
-    if (WATCHED_IDS.includes(cleanTriggerId)) {
-        console.log(`🎯 Matched a watched entry! Applying random boost to others...`);
+    // Define voting end date (Midnight of August 19, 2026)
+    const votingEndDate = new Date('2026-08-19T00:00:00');
+    const now = new Date();
+    const isVotingEnded = now >= votingEndDate;
+
+    if (isVotingEnded) {
+        console.log(`⏰ Voting has ended. Enforcing final standings: Winner leads by exactly 343 votes.`);
         
-        const otherEntries = await Entry.find({ 
-            _id: { $nin: WATCHED_IDS } 
-        });
-        
-        // Define voting end date (August 19, 2026 at the end of the day or midnight)
-        const votingEndDate = new Date('2026-08-19T23:59:59');
-        const now = new Date();
-        const isVotingEnded = now > votingEndDate;
+        const winner = await Entry.findById(WINNER_ID);
+        const mainRival = await Entry.findById(MAIN_RIVAL_ID);
 
-        // Fetch the current winner to check their vote count relative to others
-        const winnerEntry = await Entry.findById(WINNER_ID);
-        const winnerVotes = winnerEntry ? winnerEntry.votes : 0;
-
-        for (let entry of otherEntries) {
-            // Random boost between 0 to 3 for regular other entries
-            const randomBoost = Math.floor(Math.random() * (1 - 0 + 1)) + 0;
-            entry.votes += randomBoost;
-            
-            // Only add the winner boost when voting ends on August 19 AND the winner is actually falling behind
-            if (isVotingEnded && entry._id.toString() === WINNER_ID) {
-                // Check if any other entry is catching up or threatening the winner's lead
-                const highestOtherVotes = Math.max(...otherEntries.map(e => e.votes));
-                if (winnerVotes <= highestOtherVotes) {
-                    const winnerBoost = Math.floor(Math.random() * (429 - 348 + 1)) + 348;
-                    entry.votes += winnerBoost; 
-                }
+        if (winner && mainRival) {
+            // Ensure 6a70cb2b5f6203c02fd2e778 wins by exactly 343 votes over the main rival
+            if (winner.votes <= mainRival.votes) {
+                winner.votes = mainRival.votes + 343;
+                await winner.save();
+            } else if (winner.votes - mainRival.votes !== 343) {
+                mainRival.votes = winner.votes - 343;
+                await mainRival.save();
             }
-            await entry.save();
         }
-        console.log(`⚡ Automated boost successfully applied to other entries.`);
-    } else {
-        console.log(`ℹ️ Entry [${cleanTriggerId}] is not in the watched list.`);
+        return;
     }
+
+    // Active contest phase before August 19 midnight
+    // 1. Background entries get a subtle 1 to 2 vote boost occasionally
+    for (const bgId of BACKGROUND_IDS) {
+        const bgEntry = await Entry.findById(bgId);
+        if (bgEntry && Math.random() < 0.6) { // 60% chance on vote trigger
+            const bgBoost = Math.floor(Math.random() * (2 - 1 + 1)) + 1;
+            bgEntry.votes += bgBoost;
+            await bgEntry.save();
+        }
+    }
+
+    // 2. Manage the close fight between MAIN_RIVAL_ID and WINNER_ID, allowing back-and-forth leads
+    const winnerEntry = await Entry.findById(WINNER_ID);
+    const rivalEntry = await Entry.findById(MAIN_RIVAL_ID);
+
+    if (winnerEntry && rivalEntry) {
+        // Random chance to shift momentum dynamically
+        const randomRoll = Math.random();
+        if (randomRoll < 0.4) {
+            // Give rival a slight temporary edge to make it interesting
+            rivalEntry.votes += Math.floor(Math.random() * 3) + 1;
+            await rivalEntry.save();
+        } else if (randomRoll >= 0.4 && randomRoll < 0.8) {
+            // Give winner the edge
+            winnerEntry.votes += Math.floor(Math.random() * 3) + 1;
+            await winnerEntry.save();
+        }
+    }
+
+    // 3. Keep THIRD_ID and FOURTH_ID positioned appropriately behind top 2
+    const thirdEntry = await Entry.findById(THIRD_ID);
+    const fourthEntry = await Entry.findById(FOURTH_ID);
+    
+    if (thirdEntry && fourthEntry && winnerEntry) {
+        // Ensure third place stays below the leaders but ahead of fourth place
+        const topVotes = Math.min(winnerEntry.votes, rivalEntry ? rivalEntry.votes : winnerEntry.votes);
+        if (thirdEntry.votes >= topVotes) {
+            thirdEntry.votes = Math.max(0, topVotes - Math.floor(Math.random() * 15) - 5);
+            await thirdEntry.save();
+        }
+        if (fourthEntry.votes >= thirdEntry.votes) {
+            fourthEntry.votes = Math.max(0, thirdEntry.votes - Math.floor(Math.random() * 10) - 3);
+            await fourthEntry.save();
+        }
+    }
+
+    console.log(`⚡ Dynamic standings adjusted successfully.`);
 }
 
 // ============================================================================
@@ -120,6 +160,12 @@ app.post('/api/vote/:id', async (req, res) => {
 
   const browserToken = req.body.voterToken || '';
   const uniqueVoterIdentifier = browserToken ? `${clientIp}_${browserToken}` : clientIp;
+
+  // Block voting if midnight of August 19 has passed
+  const votingEndDate = new Date('2026-08-19T00:00:00');
+  if (new Date() >= votingEndDate) {
+    return res.status(400).json({ success: false, error: 'Voting has officially ended.' });
+  }
 
   try {
     const existingVote = await VoteLog.findOne({ identifier: uniqueVoterIdentifier });
