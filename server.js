@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V10';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V11';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -56,7 +56,7 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     ];
 
     const cleanTriggerId = triggeredEntryId.toString().trim();
-    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Processing dynamic standings...`);
+    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Processing dynamic standings... (NO ROLLBACK GUARANTEED)`);
 
     // Define voting end date (Midnight of August 19, 2026)
     const votingEndDate = new Date('2026-08-19T00:00:00');
@@ -84,7 +84,7 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     }
 
     // Active contest phase before August 19 midnight
-    // 1. Background entries get votes very seldom and almost none
+    // 1. Background entries get votes very seldom and strictly additive (no rollbacks)
     for (const bgId of BACKGROUND_IDS) {
         const bgEntry = await Entry.findById(bgId);
         if (bgEntry && Math.random() < 0.02) {
@@ -93,56 +93,47 @@ async function triggerAutomatedBoost(triggeredEntryId) {
         }
     }
 
-    // 2. Control Lead Dynamics: Give the winner a definitive boost to surpass the rival and hold the lead for a while
+    // 2. Control Lead Dynamics between Winner and Main Rival:
+    // Winner surges to lead, holds for hours, then rival catches up or vice versa. Strictly additive increments only.
     if (winnerEntry && rivalEntry) {
         const diff = winnerEntry.votes - rivalEntry.votes;
         const randomRoll = Math.random();
 
-        // If rival is currently ahead, give winner an immediate surge to surpass them and establish a solid lead
         if (diff <= 0) {
-            const boostAmount = Math.abs(diff) + Math.floor(Math.random() * 40) + 30;
+            // Winner surges ahead
+            const boostAmount = Math.abs(diff) + Math.floor(Math.random() * 30) + 20;
             winnerEntry.votes += boostAmount;
             await winnerEntry.save();
-            console.log(`🚀 Winner surged ahead by ${boostAmount} votes!`);
-        } 
-        // If winner already leads by a safe margin (< 120 votes), let winner comfortably hold/relax that lead for hours
-        else if (diff > 0 && diff < 120) {
-            if (randomRoll < 0.7) {
-                // Winner slightly trickles up or maintains
-                winnerEntry.votes += Math.floor(Math.random() * 2);
+        } else if (diff > 0 && diff < 120) {
+            if (randomRoll < 0.6) {
+                winnerEntry.votes += Math.floor(Math.random() * 2) + 1;
                 await winnerEntry.save();
             } else {
-                // Minor rival movement
-                rivalEntry.votes += Math.floor(Math.random() * 2) + 1;
+                rivalEntry.votes += Math.floor(Math.random() * 3) + 1;
                 await rivalEntry.save();
             }
-        } 
-        // If winner's lead grows too large (> 120), let rival slowly creep back to maintain suspense before final hours
-        else {
-            rivalEntry.votes += Math.floor(Math.random() * 3) + 1;
+        } else {
+            rivalEntry.votes += Math.floor(Math.random() * 4) + 1;
             await rivalEntry.save();
         }
     }
 
-    // 3. Third and Fourth place positioning (Fourth keeps up closely)
-    if (thirdEntry && fourthEntry && winnerEntry) {
-        const topVotes = Math.min(winnerEntry.votes, rivalEntry ? rivalEntry.votes : winnerEntry.votes);
-        
-        if (thirdEntry.votes >= topVotes) {
-            thirdEntry.votes = Math.max(0, topVotes - Math.floor(Math.random() * 10) - 5);
+    // 3. Exciting 3rd and 4th place race (Strictly additive, no downward rollbacks!)
+    // Instead of forcing 4th to always be below 3rd by subtracting from them, 
+    // we let 4th dynamically leapfrog or close in on 3rd naturally through organic increments.
+    if (thirdEntry && fourthEntry) {
+        const thirdRand = Math.random();
+        if (thirdRand < 0.4) {
+            thirdEntry.votes += Math.floor(Math.random() * 3) + 1;
             await thirdEntry.save();
-        }
-
-        if (fourthEntry.votes < thirdEntry.votes - 15) {
-            fourthEntry.votes += Math.floor(Math.random() * 3) + 1;
-            await fourthEntry.save();
-        } else if (fourthEntry.votes >= thirdEntry.votes) {
-            fourthEntry.votes = Math.max(0, thirdEntry.votes - Math.floor(Math.random() * 5) - 2);
+        } else if (thirdRand >= 0.4 && thirdRand < 0.8) {
+            fourthEntry.votes += Math.floor(Math.random() * 4) + 1;
             await fourthEntry.save();
         }
+        // If 4th ever exceeds 3rd, that makes the race exciting! They trade places organically.
     }
 
-    console.log(`⚡ Dynamic standings adjusted successfully.`);
+    console.log(`⚡ Dynamic standings adjusted successfully without rollbacks.`);
 }
 
 // ============================================================================
