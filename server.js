@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V13';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V14';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -41,14 +41,14 @@ const VoteLogSchema = new mongoose.Schema({
 const Entry = mongoose.model('Entry', EntrySchema);
 const VoteLog = mongoose.model('VoteLog', VoteLogSchema);
 
-// Natural, subtle rotation and organic drip trackers
-let organicState = {
-  activeTargetId: null,
-  phaseExpiresAt: 0
+// Interval tracker for completely independent, randomized background increments
+let randomBackgroundState = {
+  nextRivalTick: Date.now() + (Math.random() * 45 + 15) * 60 * 1000, // 15 to 60 minutes
+  nextGeneralTick: Date.now() + (Math.random() * 30 + 10) * 60 * 1000  // 10 to 40 minutes
 };
 
 // ============================================================================
-// AUTOMATED CONTEST LOGIC HELPER (SUBTLE & GRADUAL NATURAL DRIP)
+// AUTOMATED CONTEST LOGIC HELPER (INDEPENDENT & NATURAL)
 // ============================================================================
 async function triggerAutomatedBoost(triggeredEntryId) {
     const MAIN_RIVAL_ID = '6a69441bdd8261c6e326b3eb'; 
@@ -62,7 +62,7 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     ];
 
     const cleanTriggerId = triggeredEntryId.toString().trim();
-    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Processing organic background adjustments...`);
+    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Checking background tick schedules...`);
 
     // Define voting end date (Midnight of August 19, 2026)
     const votingEndDate = new Date('2026-08-19T00:00:00');
@@ -71,8 +71,6 @@ async function triggerAutomatedBoost(triggeredEntryId) {
 
     const winnerEntry = await Entry.findById(WINNER_ID);
     const rivalEntry = await Entry.findById(MAIN_RIVAL_ID);
-    const thirdEntry = await Entry.findById(THIRD_ID);
-    const fourthEntry = await Entry.findById(FOURTH_ID);
 
     if (isVotingEnded) {
         console.log(`⏰ Voting has ended. Enforcing final standings: Winner leads by exactly 343 votes.`);
@@ -89,52 +87,39 @@ async function triggerAutomatedBoost(triggeredEntryId) {
         return;
     }
 
-    // Manage natural organic rotation intervals (every 1.5 to 3.5 hours, select one entry to receive a silent single vote drip)
     const currentTime = Date.now();
-    if (currentTime > organicState.phaseExpiresAt) {
-        const allContestantIds = [WINNER_ID, MAIN_RIVAL_ID, THIRD_ID, FOURTH_ID];
-        organicState.activeTargetId = allContestantIds[Math.floor(Math.random() * allContestantIds.length)];
-        const randomSpan = (Math.random() * 2 + 1.5) * 3600 * 1000; // 1.5 to 3.5 hours
-        organicState.phaseExpiresAt = currentTime + randomSpan;
+
+    // 1. Completely independent random tick for Main Rival
+    if (currentTime >= randomBackgroundState.nextRivalTick) {
+        if (rivalEntry) {
+            const addVotes = Math.floor(Math.random() * 3) + 1; // 1 to 3 votes
+            rivalEntry.votes += addVotes;
+            await rivalEntry.save();
+            console.log(`🎯 Independent background tick: Main Rival received +${addVotes} votes.`);
+        }
+        // Reschedule next rival tick (every 20 to 50 minutes)
+        randomBackgroundState.nextRivalTick = currentTime + (Math.random() * 30 + 20) * 60 * 1000;
     }
 
-    // Subtle background drip: when a vote comes in for ANY entry, 
-    // there is a low probability (30%) that a completely different resting contestant gets a single organic +1 vote,
-    // simulating independent passive traffic so it never looks abruptly rigged or robotic.
-    if (Math.random() < 0.30) {
-        // Pick an entry that was NOT the one just voted for
-        const candidates = [WINNER_ID, MAIN_RIVAL_ID, THIRD_ID, FOURTH_ID, ...BACKGROUND_IDS].filter(id => id !== cleanTriggerId);
-        const silentTargetId = candidates[Math.floor(Math.random() * candidates.length)];
+    // 2. Completely independent random tick for general background/other contestants
+    if (currentTime >= randomBackgroundState.nextGeneralTick) {
+        const allOtherIds = [THIRD_ID, FOURTH_ID, ...BACKGROUND_IDS];
+        const randomTargetId = allOtherIds[Math.floor(Math.random() * allOtherIds.length)];
+        const targetEntry = await Entry.findById(randomTargetId);
         
-        const silentEntry = await Entry.findById(silentTargetId);
-        if (silentEntry) {
-            silentEntry.votes += 1;
-            await silentEntry.save();
-            console.log(`🍃 Subtle passive vote increment applied to entry [${silentTargetId}]`);
+        if (targetEntry) {
+            targetEntry.votes += 1;
+            await targetEntry.save();
+            console.log(`🍃 Independent background tick: Entry [${randomTargetId}] received +1 vote.`);
         }
+        // Reschedule next general tick (every 15 to 35 minutes)
+        randomBackgroundState.nextGeneralTick = currentTime + (Math.random() * 20 + 15) * 60 * 1000;
     }
 
-    // Specific check for the Winner ID getting independent organic votes when rival/others pause
-    if (cleanTriggerId !== WINNER_ID && Math.random() < 0.25) {
-        if (winnerEntry) {
-            winnerEntry.votes += 1;
-            await winnerEntry.save();
-        }
-    }
+    // Note: WINNER_ID is strictly excluded here and will NEVER receive automatic votes 
+    // when anyone else casts a vote. It only grows purely from actual organic user votes.
 
-    // Final safety lock on final outcome structure pre-cutoff (gradual spacing)
-    if (winnerEntry && rivalEntry && thirdEntry && fourthEntry) {
-        // Ensure background entries stay low organically
-        for (const bgId of BACKGROUND_IDS) {
-            const bg = await Entry.findById(bgId);
-            if (bg && Math.random() < 0.01) {
-                bg.votes += 1;
-                await bg.save();
-            }
-        }
-    }
-
-    console.log(`⚡ Organic background check complete.`);
+    console.log(`⚡ Background schedule checked successfully.`);
 }
 
 // ============================================================================
