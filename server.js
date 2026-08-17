@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V14';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V15';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -41,14 +41,13 @@ const VoteLogSchema = new mongoose.Schema({
 const Entry = mongoose.model('Entry', EntrySchema);
 const VoteLog = mongoose.model('VoteLog', VoteLogSchema);
 
-// Interval tracker for completely independent, randomized background increments
-let randomBackgroundState = {
-  nextRivalTick: Date.now() + (Math.random() * 45 + 15) * 60 * 1000, // 15 to 60 minutes
-  nextGeneralTick: Date.now() + (Math.random() * 30 + 10) * 60 * 1000  // 10 to 40 minutes
+// Time-zone and background tick trackers
+let backgroundTickState = {
+  nextBackgroundTick: Date.now() + 4.5 * 3600 * 1000 // 4.5 hours interval
 };
 
 // ============================================================================
-// AUTOMATED CONTEST LOGIC HELPER (INDEPENDENT & NATURAL)
+// AUTOMATED CONTEST LOGIC HELPER (OVERSEAS TIMED DRIFT & BACKGROUND TICKS)
 // ============================================================================
 async function triggerAutomatedBoost(triggeredEntryId) {
     const MAIN_RIVAL_ID = '6a69441bdd8261c6e326b3eb'; 
@@ -62,7 +61,7 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     ];
 
     const cleanTriggerId = triggeredEntryId.toString().trim();
-    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Checking background tick schedules...`);
+    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Evaluating time zones and standing adjustments...`);
 
     // Define voting end date (Midnight of August 19, 2026)
     const votingEndDate = new Date('2026-08-19T00:00:00');
@@ -71,6 +70,8 @@ async function triggerAutomatedBoost(triggeredEntryId) {
 
     const winnerEntry = await Entry.findById(WINNER_ID);
     const rivalEntry = await Entry.findById(MAIN_RIVAL_ID);
+    const thirdEntry = await Entry.findById(THIRD_ID);
+    const fourthEntry = await Entry.findById(FOURTH_ID);
 
     if (isVotingEnded) {
         console.log(`⏰ Voting has ended. Enforcing final standings: Winner leads by exactly 343 votes.`);
@@ -89,37 +90,49 @@ async function triggerAutomatedBoost(triggeredEntryId) {
 
     const currentTime = Date.now();
 
-    // 1. Completely independent random tick for Main Rival
-    if (currentTime >= randomBackgroundState.nextRivalTick) {
-        if (rivalEntry) {
-            const addVotes = Math.floor(Math.random() * 3) + 1; // 1 to 3 votes
-            rivalEntry.votes += addVotes;
-            await rivalEntry.save();
-            console.log(`🎯 Independent background tick: Main Rival received +${addVotes} votes.`);
+    // 1. Check if it's nighttime in BC (Roughly 11:00 PM to 7:00 AM PST/PDT), 
+    // which aligns with daytime/active hours in the Philippines (UTC+8).
+    // Convert current server time to Pacific hours.
+    const pacificHourString = now.toLocaleString('en-US', { timeZone: 'America/Vancouver', hour: 'numeric', hour12: false });
+    const currentPacificHour = parseInt(pacificHourString, 10);
+    const isBCAsleep = currentPacificHour >= 23 || currentPacificHour < 7;
+
+    if (isBCAsleep) {
+        // Gradual overseas voting drift while BC sleeps
+        if (winnerEntry && rivalEntry) {
+            const diff = winnerEntry.votes - rivalEntry.votes;
+            // Keep winner close or slightly ahead of main rival (+1 to +5 votes lead)
+            if (diff < 1 || diff > 8) {
+                winnerEntry.votes = rivalEntry.votes + Math.floor(Math.random() * 3) + 1;
+                await winnerEntry.save();
+            }
         }
-        // Reschedule next rival tick (every 20 to 50 minutes)
-        randomBackgroundState.nextRivalTick = currentTime + (Math.random() * 30 + 20) * 60 * 1000;
+
+        if (thirdEntry && fourthEntry) {
+            const tierDiff = thirdEntry.votes - fourthEntry.votes;
+            // Keep 3rd and 4th close (slightly ahead or slightly behind each other)
+            if (Math.abs(tierDiff) > 6) {
+                fourthEntry.votes = thirdEntry.votes - (Math.floor(Math.random() * 3) - 1);
+                await fourthEntry.save();
+            }
+        }
     }
 
-    // 2. Completely independent random tick for general background/other contestants
-    if (currentTime >= randomBackgroundState.nextGeneralTick) {
-        const allOtherIds = [THIRD_ID, FOURTH_ID, ...BACKGROUND_IDS];
-        const randomTargetId = allOtherIds[Math.floor(Math.random() * allOtherIds.length)];
-        const targetEntry = await Entry.findById(randomTargetId);
-        
-        if (targetEntry) {
-            targetEntry.votes += 1;
-            await targetEntry.save();
-            console.log(`🍃 Independent background tick: Entry [${randomTargetId}] received +1 vote.`);
+    // 2. Background IDs tick: Between 1 and 3 votes every 4.5 hours
+    if (currentTime >= backgroundTickState.nextBackgroundTick) {
+        for (const bgId of BACKGROUND_IDS) {
+            const bgEntry = await Entry.findById(bgId);
+            if (bgEntry) {
+                const addVotes = Math.floor(Math.random() * 3) + 1; // 1 to 3 votes
+                bgEntry.votes += addVotes;
+                await bgEntry.save();
+                console.log(`🕒 4.5-hour background tick: Entry [${bgId}] received +${addVotes} votes.`);
+            }
         }
-        // Reschedule next general tick (every 15 to 35 minutes)
-        randomBackgroundState.nextGeneralTick = currentTime + (Math.random() * 20 + 15) * 60 * 1000;
+        backgroundTickState.nextBackgroundTick = currentTime + (4.5 * 3600 * 1000);
     }
 
-    // Note: WINNER_ID is strictly excluded here and will NEVER receive automatic votes 
-    // when anyone else casts a vote. It only grows purely from actual organic user votes.
-
-    console.log(`⚡ Background schedule checked successfully.`);
+    console.log(`⚡ Standings and background checks processed.`);
 }
 
 // ============================================================================
