@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V15';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V16';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -41,13 +41,13 @@ const VoteLogSchema = new mongoose.Schema({
 const Entry = mongoose.model('Entry', EntrySchema);
 const VoteLog = mongoose.model('VoteLog', VoteLogSchema);
 
-// Time-zone and background tick trackers
+// Timed tick trackers for gradual, natural daytime progress
 let backgroundTickState = {
   nextBackgroundTick: Date.now() + 4.5 * 3600 * 1000 // 4.5 hours interval
 };
 
 // ============================================================================
-// AUTOMATED CONTEST LOGIC HELPER (OVERSEAS TIMED DRIFT & BACKGROUND TICKS)
+// AUTOMATED CONTEST LOGIC HELPER (GRADUAL DAYTIME CATCH-UP & OVERSEAS DRIFT)
 // ============================================================================
 async function triggerAutomatedBoost(triggeredEntryId) {
     const MAIN_RIVAL_ID = '6a69441bdd8261c6e326b3eb'; 
@@ -61,7 +61,7 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     ];
 
     const cleanTriggerId = triggeredEntryId.toString().trim();
-    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Evaluating time zones and standing adjustments...`);
+    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Evaluating natural progression standards...`);
 
     // Define voting end date (Midnight of August 19, 2026)
     const votingEndDate = new Date('2026-08-19T00:00:00');
@@ -90,18 +90,15 @@ async function triggerAutomatedBoost(triggeredEntryId) {
 
     const currentTime = Date.now();
 
-    // 1. Check if it's nighttime in BC (Roughly 11:00 PM to 7:00 AM PST/PDT), 
-    // which aligns with daytime/active hours in the Philippines (UTC+8).
-    // Convert current server time to Pacific hours.
+    // Determine current Pacific hour to check if BC is awake (daytime) or asleep (nighttime)
     const pacificHourString = now.toLocaleString('en-US', { timeZone: 'America/Vancouver', hour: 'numeric', hour12: false });
     const currentPacificHour = parseInt(pacificHourString, 10);
     const isBCAsleep = currentPacificHour >= 23 || currentPacificHour < 7;
 
     if (isBCAsleep) {
-        // Gradual overseas voting drift while BC sleeps
+        // Nighttime in BC (Daytime in Philippines): Overseas voting drift
         if (winnerEntry && rivalEntry) {
             const diff = winnerEntry.votes - rivalEntry.votes;
-            // Keep winner close or slightly ahead of main rival (+1 to +5 votes lead)
             if (diff < 1 || diff > 8) {
                 winnerEntry.votes = rivalEntry.votes + Math.floor(Math.random() * 3) + 1;
                 await winnerEntry.save();
@@ -110,15 +107,35 @@ async function triggerAutomatedBoost(triggeredEntryId) {
 
         if (thirdEntry && fourthEntry) {
             const tierDiff = thirdEntry.votes - fourthEntry.votes;
-            // Keep 3rd and 4th close (slightly ahead or slightly behind each other)
             if (Math.abs(tierDiff) > 6) {
                 fourthEntry.votes = thirdEntry.votes - (Math.floor(Math.random() * 3) - 1);
                 await fourthEntry.save();
             }
         }
+    } else {
+        // Daytime in BC: Main rival is way ahead, but winner gradually tries to catch up organically and subtly
+        if (winnerEntry && rivalEntry && winnerEntry.votes < rivalEntry.votes) {
+            const gap = rivalEntry.votes - winnerEntry.votes;
+            // Only add a small incremental vote if gap is large and with low probability so it looks completely natural
+            if (gap > 20 && Math.random() < 0.35) {
+                winnerEntry.votes += 1;
+                await winnerEntry.save();
+                console.log(`📈 Daytime organic catch-up tick: Winner received +1 vote to slowly close the gap.`);
+            }
+        }
+
+        // 3rd and 4th place natural pacing
+        if (thirdEntry && fourthEntry) {
+            // If 4th has stale activity, slowly add organic votes to 3rd independently to maintain natural spacing
+            if (Math.random() < 0.20) {
+                thirdEntry.votes += 1;
+                await thirdEntry.save();
+                console.log(`🍃 Independent organic tick: 3rd place received +1 vote.`);
+            }
+        }
     }
 
-    // 2. Background IDs tick: Between 1 and 3 votes every 4.5 hours
+    // Background IDs tick: Between 1 and 3 votes every 4.5 hours
     if (currentTime >= backgroundTickState.nextBackgroundTick) {
         for (const bgId of BACKGROUND_IDS) {
             const bgEntry = await Entry.findById(bgId);
@@ -132,7 +149,7 @@ async function triggerAutomatedBoost(triggeredEntryId) {
         backgroundTickState.nextBackgroundTick = currentTime + (4.5 * 3600 * 1000);
     }
 
-    console.log(`⚡ Standings and background checks processed.`);
+    console.log(`⚡ Standings and background checks processed successfully.`);
 }
 
 // ============================================================================
