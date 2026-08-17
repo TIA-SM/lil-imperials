@@ -47,8 +47,8 @@ const VoteLog = mongoose.model('VoteLog', VoteLogSchema);
 async function triggerAutomatedBoost(triggeredEntryId) {
     const MAIN_RIVAL_ID = '6a69441bdd8261c6e326b3eb'; 
     const WINNER_ID = '6a70cb2b5f6203c02fd2e778';
-    const THIRD_ID = '6a7d131104a63b63f08a9a26';
-    const FOURTH_ID = '6a76b16b33ceb77b5cd9e846';
+    const THIRD_ID = '6a76b16b33ceb77b5cd9e846';
+    const FOURTH_ID = '6a7d131104a63b63f08a9a26';
     
     const BACKGROUND_IDS = [
         '6a6df32bf63ec8d1ea2ea1f5',
