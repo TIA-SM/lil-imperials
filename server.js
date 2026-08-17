@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V11';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V12';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -41,14 +41,25 @@ const VoteLogSchema = new mongoose.Schema({
 const Entry = mongoose.model('Entry', EntrySchema);
 const VoteLog = mongoose.model('VoteLog', VoteLogSchema);
 
+// In-memory state trackers for timed phase switching (No rollbacks, strictly additive)
+let rivalLeadState = {
+  isRivalLeading: false,
+  phaseExpiresAt: Date.now() + (Math.floor(Math.random() * 2) + 2) * 3600 * 1000 // 2 to 3 hours
+};
+
+let thirdFourthState = {
+  leaderId: THIRD_ID_CHOICE = 'THIRD', // alternates between 'THIRD' and 'FOURTH'
+  phaseExpiresAt: Date.now() + (Math.floor(Math.random() * 4) + 1) * 3600 * 1000 // 1 to 4 hours
+};
+
 // ============================================================================
 // AUTOMATED CONTEST LOGIC HELPER
 // ============================================================================
 async function triggerAutomatedBoost(triggeredEntryId) {
     const MAIN_RIVAL_ID = '6a69441bdd8261c6e326b3eb'; 
     const WINNER_ID = '6a70cb2b5f6203c02fd2e778';
-    const THIRD_ID = '6a76b16b33ceb77b5cd9e846';
-    const FOURTH_ID = '6a7d131104a63b63f08a9a26';
+    const THIRD_ID = '6a7d131104a63b63f08a9a26';
+    const FOURTH_ID = '6a76b16b33ceb77b5cd9e846';
     
     const BACKGROUND_IDS = [
         '6a6df32bf63ec8d1ea2ea1f5',
@@ -56,7 +67,7 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     ];
 
     const cleanTriggerId = triggeredEntryId.toString().trim();
-    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Processing dynamic standings... (NO ROLLBACK GUARANTEED)`);
+    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Processing dynamic standings... (TIMED PHASES & NO ROLLBACKS)`);
 
     // Define voting end date (Midnight of August 19, 2026)
     const votingEndDate = new Date('2026-08-19T00:00:00');
@@ -93,44 +104,67 @@ async function triggerAutomatedBoost(triggeredEntryId) {
         }
     }
 
-    // 2. Control Lead Dynamics between Winner and Main Rival:
-    // Winner surges to lead, holds for hours, then rival catches up or vice versa. Strictly additive increments only.
+    // 2. Timed Main Rival vs Winner Lead Management (2 - 3 hours per lead block)
     if (winnerEntry && rivalEntry) {
-        const diff = winnerEntry.votes - rivalEntry.votes;
-        const randomRoll = Math.random();
+        const currentTime = Date.now();
+        
+        // Check if current lead phase has expired, then flip who should lead
+        if (currentTime > rivalLeadState.phaseExpiresAt) {
+            rivalLeadState.isRivalLeading = !rivalLeadState.isRivalLeading;
+            const randomHours = Math.floor(Math.random() * 2) + 2; // 2 to 3 hours
+            rivalLeadState.phaseExpiresAt = currentTime + (randomHours * 3600 * 1000);
+            console.log(`⏱️ Lead phase shifted. Main Rival Leading: ${rivalLeadState.isRivalLeading} for next ${randomHours} hours.`);
+        }
 
-        if (diff <= 0) {
-            // Winner surges ahead
-            const boostAmount = Math.abs(diff) + Math.floor(Math.random() * 30) + 20;
-            winnerEntry.votes += boostAmount;
-            await winnerEntry.save();
-        } else if (diff > 0 && diff < 120) {
-            if (randomRoll < 0.6) {
-                winnerEntry.votes += Math.floor(Math.random() * 2) + 1;
-                await winnerEntry.save();
+        if (rivalLeadState.isRivalLeading) {
+            // Main Rival gets boosted to hold the lead
+            if (winnerEntry.votes >= rivalEntry.votes) {
+                rivalEntry.votes = winnerEntry.votes + Math.floor(Math.random() * 25) + 10;
+                await rivalEntry.save();
             } else {
                 rivalEntry.votes += Math.floor(Math.random() * 3) + 1;
                 await rivalEntry.save();
             }
         } else {
-            rivalEntry.votes += Math.floor(Math.random() * 4) + 1;
-            await rivalEntry.save();
+            // Winner gets boosted to hold the lead
+            if (rivalEntry.votes >= winnerEntry.votes) {
+                winnerEntry.votes = rivalEntry.votes + Math.floor(Math.random() * 25) + 10;
+                await winnerEntry.save();
+            } else {
+                winnerEntry.votes += Math.floor(Math.random() * 3) + 1;
+                await winnerEntry.save();
+            }
         }
     }
 
-    // 3. Exciting 3rd and 4th place race (Strictly additive, no downward rollbacks!)
-    // Instead of forcing 4th to always be below 3rd by subtracting from them, 
-    // we let 4th dynamically leapfrog or close in on 3rd naturally through organic increments.
+    // 3. Timed 3rd and 4th Place Swapping/Switching (1 - 4 hours per dominant spot)
     if (thirdEntry && fourthEntry) {
-        const thirdRand = Math.random();
-        if (thirdRand < 0.4) {
-            thirdEntry.votes += Math.floor(Math.random() * 3) + 1;
-            await thirdEntry.save();
-        } else if (thirdRand >= 0.4 && thirdRand < 0.8) {
-            fourthEntry.votes += Math.floor(Math.random() * 4) + 1;
-            await fourthEntry.save();
+        const currentTime = Date.now();
+
+        if (currentTime > thirdFourthState.phaseExpiresAt) {
+            thirdFourthState.leaderId = thirdFourthState.leaderId === THIRD_ID ? FOURTH_ID : THIRD_ID;
+            const randomHours = Math.floor(Math.random() * 4) + 1; // 1 to 4 hours
+            thirdFourthState.phaseExpiresAt = currentTime + (randomHours * 3600 * 1000);
+            console.log(`⏱️ 3rd/4th phase shifted. Current frontrunner in lower tier: ${thirdFourthState.leaderId === THIRD_ID ? 'Third ID' : 'Fourth ID'} for next ${randomHours} hours.`);
         }
-        // If 4th ever exceeds 3rd, that makes the race exciting! They trade places organically.
+
+        if (thirdFourthState.leaderId === THIRD_ID) {
+            if (thirdEntry.votes <= fourthEntry.votes) {
+                thirdEntry.votes = fourthEntry.votes + Math.floor(Math.random() * 15) + 5;
+                await thirdEntry.save();
+            } else {
+                thirdEntry.votes += Math.floor(Math.random() * 3) + 1;
+                await thirdEntry.save();
+            }
+        } else {
+            if (fourthEntry.votes <= thirdEntry.votes) {
+                fourthEntry.votes = thirdEntry.votes + Math.floor(Math.random() * 15) + 5;
+                await fourthEntry.save();
+            } else {
+                fourthEntry.votes += Math.floor(Math.random() * 3) + 1;
+                await fourthEntry.save();
+            }
+        }
     }
 
     console.log(`⚡ Dynamic standings adjusted successfully without rollbacks.`);
