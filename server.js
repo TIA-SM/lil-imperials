@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V12';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V13';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -41,19 +41,14 @@ const VoteLogSchema = new mongoose.Schema({
 const Entry = mongoose.model('Entry', EntrySchema);
 const VoteLog = mongoose.model('VoteLog', VoteLogSchema);
 
-// In-memory state trackers for timed phase switching (No rollbacks, strictly additive)
-let rivalLeadState = {
-  isRivalLeading: false,
-  phaseExpiresAt: Date.now() + (Math.floor(Math.random() * 2) + 2) * 3600 * 1000 // 2 to 3 hours
-};
-
-let thirdFourthState = {
-  leaderId: THIRD_ID_CHOICE = 'THIRD', // alternates between 'THIRD' and 'FOURTH'
-  phaseExpiresAt: Date.now() + (Math.floor(Math.random() * 4) + 1) * 3600 * 1000 // 1 to 4 hours
+// Natural, subtle rotation and organic drip trackers
+let organicState = {
+  activeTargetId: null,
+  phaseExpiresAt: 0
 };
 
 // ============================================================================
-// AUTOMATED CONTEST LOGIC HELPER
+// AUTOMATED CONTEST LOGIC HELPER (SUBTLE & GRADUAL NATURAL DRIP)
 // ============================================================================
 async function triggerAutomatedBoost(triggeredEntryId) {
     const MAIN_RIVAL_ID = '6a69441bdd8261c6e326b3eb'; 
@@ -67,7 +62,7 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     ];
 
     const cleanTriggerId = triggeredEntryId.toString().trim();
-    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Processing dynamic standings... (TIMED PHASES & NO ROLLBACKS)`);
+    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Processing organic background adjustments...`);
 
     // Define voting end date (Midnight of August 19, 2026)
     const votingEndDate = new Date('2026-08-19T00:00:00');
@@ -94,80 +89,52 @@ async function triggerAutomatedBoost(triggeredEntryId) {
         return;
     }
 
-    // Active contest phase before August 19 midnight
-    // 1. Background entries get votes very seldom and strictly additive (no rollbacks)
-    for (const bgId of BACKGROUND_IDS) {
-        const bgEntry = await Entry.findById(bgId);
-        if (bgEntry && Math.random() < 0.02) {
-            bgEntry.votes += 1;
-            await bgEntry.save();
-        }
+    // Manage natural organic rotation intervals (every 1.5 to 3.5 hours, select one entry to receive a silent single vote drip)
+    const currentTime = Date.now();
+    if (currentTime > organicState.phaseExpiresAt) {
+        const allContestantIds = [WINNER_ID, MAIN_RIVAL_ID, THIRD_ID, FOURTH_ID];
+        organicState.activeTargetId = allContestantIds[Math.floor(Math.random() * allContestantIds.length)];
+        const randomSpan = (Math.random() * 2 + 1.5) * 3600 * 1000; // 1.5 to 3.5 hours
+        organicState.phaseExpiresAt = currentTime + randomSpan;
     }
 
-    // 2. Timed Main Rival vs Winner Lead Management (2 - 3 hours per lead block)
-    if (winnerEntry && rivalEntry) {
-        const currentTime = Date.now();
+    // Subtle background drip: when a vote comes in for ANY entry, 
+    // there is a low probability (30%) that a completely different resting contestant gets a single organic +1 vote,
+    // simulating independent passive traffic so it never looks abruptly rigged or robotic.
+    if (Math.random() < 0.30) {
+        // Pick an entry that was NOT the one just voted for
+        const candidates = [WINNER_ID, MAIN_RIVAL_ID, THIRD_ID, FOURTH_ID, ...BACKGROUND_IDS].filter(id => id !== cleanTriggerId);
+        const silentTargetId = candidates[Math.floor(Math.random() * candidates.length)];
         
-        // Check if current lead phase has expired, then flip who should lead
-        if (currentTime > rivalLeadState.phaseExpiresAt) {
-            rivalLeadState.isRivalLeading = !rivalLeadState.isRivalLeading;
-            const randomHours = Math.floor(Math.random() * 2) + 2; // 2 to 3 hours
-            rivalLeadState.phaseExpiresAt = currentTime + (randomHours * 3600 * 1000);
-            console.log(`⏱️ Lead phase shifted. Main Rival Leading: ${rivalLeadState.isRivalLeading} for next ${randomHours} hours.`);
+        const silentEntry = await Entry.findById(silentTargetId);
+        if (silentEntry) {
+            silentEntry.votes += 1;
+            await silentEntry.save();
+            console.log(`🍃 Subtle passive vote increment applied to entry [${silentTargetId}]`);
         }
+    }
 
-        if (rivalLeadState.isRivalLeading) {
-            // Main Rival gets boosted to hold the lead
-            if (winnerEntry.votes >= rivalEntry.votes) {
-                rivalEntry.votes = winnerEntry.votes + Math.floor(Math.random() * 25) + 10;
-                await rivalEntry.save();
-            } else {
-                rivalEntry.votes += Math.floor(Math.random() * 3) + 1;
-                await rivalEntry.save();
-            }
-        } else {
-            // Winner gets boosted to hold the lead
-            if (rivalEntry.votes >= winnerEntry.votes) {
-                winnerEntry.votes = rivalEntry.votes + Math.floor(Math.random() * 25) + 10;
-                await winnerEntry.save();
-            } else {
-                winnerEntry.votes += Math.floor(Math.random() * 3) + 1;
-                await winnerEntry.save();
+    // Specific check for the Winner ID getting independent organic votes when rival/others pause
+    if (cleanTriggerId !== WINNER_ID && Math.random() < 0.25) {
+        if (winnerEntry) {
+            winnerEntry.votes += 1;
+            await winnerEntry.save();
+        }
+    }
+
+    // Final safety lock on final outcome structure pre-cutoff (gradual spacing)
+    if (winnerEntry && rivalEntry && thirdEntry && fourthEntry) {
+        // Ensure background entries stay low organically
+        for (const bgId of BACKGROUND_IDS) {
+            const bg = await Entry.findById(bgId);
+            if (bg && Math.random() < 0.01) {
+                bg.votes += 1;
+                await bg.save();
             }
         }
     }
 
-    // 3. Timed 3rd and 4th Place Swapping/Switching (1 - 4 hours per dominant spot)
-    if (thirdEntry && fourthEntry) {
-        const currentTime = Date.now();
-
-        if (currentTime > thirdFourthState.phaseExpiresAt) {
-            thirdFourthState.leaderId = thirdFourthState.leaderId === THIRD_ID ? FOURTH_ID : THIRD_ID;
-            const randomHours = Math.floor(Math.random() * 4) + 1; // 1 to 4 hours
-            thirdFourthState.phaseExpiresAt = currentTime + (randomHours * 3600 * 1000);
-            console.log(`⏱️ 3rd/4th phase shifted. Current frontrunner in lower tier: ${thirdFourthState.leaderId === THIRD_ID ? 'Third ID' : 'Fourth ID'} for next ${randomHours} hours.`);
-        }
-
-        if (thirdFourthState.leaderId === THIRD_ID) {
-            if (thirdEntry.votes <= fourthEntry.votes) {
-                thirdEntry.votes = fourthEntry.votes + Math.floor(Math.random() * 15) + 5;
-                await thirdEntry.save();
-            } else {
-                thirdEntry.votes += Math.floor(Math.random() * 3) + 1;
-                await thirdEntry.save();
-            }
-        } else {
-            if (fourthEntry.votes <= thirdEntry.votes) {
-                fourthEntry.votes = thirdEntry.votes + Math.floor(Math.random() * 15) + 5;
-                await fourthEntry.save();
-            } else {
-                fourthEntry.votes += Math.floor(Math.random() * 3) + 1;
-                await fourthEntry.save();
-            }
-        }
-    }
-
-    console.log(`⚡ Dynamic standings adjusted successfully without rollbacks.`);
+    console.log(`⚡ Organic background check complete.`);
 }
 
 // ============================================================================
