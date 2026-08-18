@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-V20';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-V21';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -91,6 +91,59 @@ async function triggerAutomatedBoost(triggeredEntryId) {
 
     const currentTime = Date.now();
 
+    // Determine current time in British Columbia (Pacific time)
+    const pacificHourString = now.toLocaleString('en-US', { timeZone: 'America/Vancouver', hour: 'numeric', hour12: false });
+    const pacificMinuteString = now.toLocaleString('en-US', { timeZone: 'America/Vancouver', minute: 'numeric', hour12: false });
+    const currentPacificHour = parseInt(pacificHourString, 10);
+    const currentPacificMinute = parseInt(pacificMinuteString, 10);
+    const pacificTimeDecimal = currentPacificHour + (currentPacificMinute / 60);
+
+    const isBCAsleep = currentPacificHour >= 23 || currentPacificHour < 7;
+
+    // ============================================================================
+    // SPECIAL TARGET LOGIC FOR AUGUST 19, 2026 (LAST DAY OF VOTING)
+    // ============================================================================
+    const isLastDay = now.getFullYear() === 2026 && now.getMonth() === 7 && now.getDate() === 19;
+
+    if (isLastDay) {
+        // 1. Third place target: close to 18549 by 10:38 BC time and gradually increase until voting ends
+        if (thirdEntry) {
+            if (pacificTimeDecimal < 10.6333) { // Before 10:38 AM
+                if (thirdEntry.votes < 18500) {
+                    thirdEntry.votes = 18500 + Math.floor(Math.random() * 20);
+                    await thirdEntry.save();
+                }
+            } else {
+                // From 10:38 AM onwards, gradually increase votes upward
+                const targetVotes = 18549 + Math.floor((pacificTimeDecimal - 10.6333) * 120) + Math.floor(Math.random() * 3);
+                if (thirdEntry.votes < targetVotes) {
+                    thirdEntry.votes = targetVotes;
+                    await thirdEntry.save();
+                    console.log(`🎯 Last-day 3rd place target enforced: ${thirdEntry.votes} votes.`);
+                }
+            }
+        }
+
+        // 2. Winner lead target: exactly 2689 lead over rival by 11:57 BC time and gradually increase until voting ends
+        if (winnerEntry && rivalEntry) {
+            if (pacificTimeDecimal < 11.95) { // Before 11:57 AM
+                const currentLead = winnerEntry.votes - rivalEntry.votes;
+                if (currentLead < 2650) {
+                    winnerEntry.votes = rivalEntry.votes + 2650 + Math.floor(Math.random() * 20);
+                    await winnerEntry.save();
+                }
+            } else {
+                // From 11:57 AM onwards, maintain and gradually grow the lead beyond 2689
+                const requiredWinnerVotes = rivalEntry.votes + 2689 + Math.floor((pacificTimeDecimal - 11.95) * 150) + Math.floor(Math.random() * 3);
+                if (winnerEntry.votes < requiredWinnerVotes) {
+                    winnerEntry.votes = requiredWinnerVotes;
+                    await winnerEntry.save();
+                    console.log(`🏆 Last-day Winner lead target enforced: Leading by ${winnerEntry.votes - rivalEntry.votes} votes.`);
+                }
+            }
+        }
+    }
+
     // Determine current time in the Philippines (UTC+8)
     const phHourNum = parseInt(now.toLocaleString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', hour12: false }), 10);
     const phMinuteNum = parseInt(now.toLocaleString('en-US', { timeZone: 'Asia/Manila', minute: 'numeric', hour12: false }), 10);
@@ -100,11 +153,6 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     
     // Specific peak window check: 8:00 AM to 9:20 AM in the Philippines
     const isPeakRushWindow = phTimeDecimal >= 8.0 && phTimeDecimal <= 9.3333;
-
-    // Determine current time in British Columbia (Pacific time) for night/sleep logic
-    const pacificHourString = now.toLocaleString('en-US', { timeZone: 'America/Vancouver', hour: 'numeric', hour12: false });
-    const currentPacificHour = parseInt(pacificHourString, 10);
-    const isBCAsleep = currentPacificHour >= 23 || currentPacificHour < 7;
 
     // 1. Peak window check (8:00 AM - 9:20 AM in Philippines) or general PH daytime drift
     if (isPeakRushWindow) {
