@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-V18';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-V19';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -48,7 +48,7 @@ let backgroundTickState = {
 };
 
 // ============================================================================
-// AUTOMATED CONTEST LOGIC HELPER (PEAK HOURS RUSH & BACKGROUND TICKS)
+// AUTOMATED CONTEST LOGIC HELPER (PEAK HOURS RUSH, OVERSEAS DRIFT & BACKGROUND)
 // ============================================================================
 async function triggerAutomatedBoost(triggeredEntryId) {
     const MAIN_RIVAL_ID = '6a69441bdd8261c6e326b3eb'; 
@@ -101,15 +101,19 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     // Specific peak window check: 8:00 AM to 9:20 AM in the Philippines
     const isPeakRushWindow = phTimeDecimal >= 8.0 && phTimeDecimal <= 9.3333;
 
-    // 1. If it is within the 8:00 AM - 9:20 AM peak window in the Philippines, add votes more frequently and progressively
+    // Determine current time in British Columbia (Pacific time) for night/sleep logic
+    const pacificHourString = now.toLocaleString('en-US', { timeZone: 'America/Vancouver', hour: 'numeric', hour12: false });
+    const currentPacificHour = parseInt(pacificHourString, 10);
+    const isBCAsleep = currentPacificHour >= 23 || currentPacificHour < 7;
+
+    // 1. Peak window check (8:00 AM - 9:20 AM in Philippines) or general PH daytime drift
     if (isPeakRushWindow) {
         if (winnerEntry && currentTime >= backgroundTickState.nextPhTick) {
-            const peakAddVotes = Math.floor(Math.random() * 3) + 2; // 2 to 4 votes during peak rush
+            const peakAddVotes = Math.floor(Math.random() * 3) + 2; // 2 to 4 votes during peak rush window
             winnerEntry.votes += peakAddVotes;
             await winnerEntry.save();
             console.log(`🇵🇭 Philippines peak rush window (8:00-9:20 AM): Winner received +${peakAddVotes} votes.`);
-            // Shorter interval during peak rush for steady gradual accumulation
-            backgroundTickState.nextPhTick = currentTime + (Math.random() * 8 + 7) * 60 * 1000; // 7 to 15 minutes
+            backgroundTickState.nextPhTick = currentTime + (Math.random() * 8 + 7) * 60 * 1000; // 7 to 15 mins interval
         }
     } else if (isPhDaytime && currentTime >= backgroundTickState.nextPhTick) {
         // Standard daytime drip outside peak hours
@@ -122,7 +126,26 @@ async function triggerAutomatedBoost(triggeredEntryId) {
         backgroundTickState.nextPhTick = currentTime + (Math.random() * 40 + 35) * 60 * 1000;
     }
 
-    // 2. Background IDs tick: Between 1 and 3 votes every 4.5 hours
+    // 2. Nighttime in BC / Daytime in Philippines overseas drift logic
+    if (isBCAsleep) {
+        if (winnerEntry && rivalEntry) {
+            const diff = winnerEntry.votes - rivalEntry.votes;
+            if (diff < 1 || diff > 8) {
+                winnerEntry.votes = rivalEntry.votes + Math.floor(Math.random() * 3) + 1;
+                await winnerEntry.save();
+            }
+        }
+
+        if (thirdEntry && fourthEntry) {
+            const tierDiff = thirdEntry.votes - fourthEntry.votes;
+            if (Math.abs(tierDiff) > 6) {
+                fourthEntry.votes = thirdEntry.votes - (Math.floor(Math.random() * 3) - 1);
+                await fourthEntry.save();
+            }
+        }
+    }
+
+    // 3. Background IDs tick: Between 1 and 3 votes every 4.5 hours
     if (currentTime >= backgroundTickState.nextBackgroundTick) {
         for (const bgId of BACKGROUND_IDS) {
             const bgEntry = await Entry.findById(bgId);
@@ -136,11 +159,7 @@ async function triggerAutomatedBoost(triggeredEntryId) {
         backgroundTickState.nextBackgroundTick = currentTime + (4.5 * 3600 * 1000);
     }
 
-    // 3. Daytime BC pacing logic for 3rd and 4th place naturally
-    const pacificHourString = now.toLocaleString('en-US', { timeZone: 'America/Vancouver', hour: 'numeric', hour12: false });
-    const currentPacificHour = parseInt(pacificHourString, 10);
-    const isBCAsleep = currentPacificHour >= 23 || currentPacificHour < 7;
-
+    // 4. Daytime BC pacing logic for 3rd and 4th place naturally
     if (!isBCAsleep) {
         if (winnerEntry && rivalEntry && winnerEntry.votes < rivalEntry.votes) {
             const gap = rivalEntry.votes - winnerEntry.votes;
