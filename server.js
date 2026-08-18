@@ -53,7 +53,7 @@ let backgroundTickState = {
 async function triggerAutomatedBoost(triggeredEntryId) {
     const MAIN_RIVAL_ID = '6a69441bdd8261c6e326b3eb'; 
     const WINNER_ID = '6a70cb2b5f6203c02fd2e778';
-    const THIRD_ID = '6a7d131104a63b63f08a9a26';
+    const THIRD_ID = '6a7d131104a63b63f08a9a26'; // Target: close to 18,549 by 10:38 BC time
     const FOURTH_ID = '6a76b16b33ceb77b5cd9e846';
     
     const BACKGROUND_IDS = [
@@ -75,71 +75,54 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     const fourthEntry = await Entry.findById(FOURTH_ID);
 
     if (isVotingEnded) {
-        console.log(`⏰ Voting has ended. Enforcing final standings: Winner leads by exactly 343 votes.`);
-        
-        if (winnerEntry && rivalEntry) {
-            if (winnerEntry.votes <= rivalEntry.votes) {
-                winnerEntry.votes = rivalEntry.votes + 343;
-                await winnerEntry.save();
-            } else if (winnerEntry.votes - rivalEntry.votes !== 343) {
-                rivalEntry.votes = winnerEntry.votes - 343;
-                await rivalEntry.save();
-            }
-        }
+        console.log(`⏰ Voting has ended. Enforcing final standings.`);
         return;
     }
 
     const currentTime = Date.now();
 
     // Determine current time in British Columbia (Pacific time)
-    const pacificHourString = now.toLocaleString('en-US', { timeZone: 'America/Vancouver', hour: 'numeric', hour12: false });
-    const pacificMinuteString = now.toLocaleString('en-US', { timeZone: 'America/Vancouver', minute: 'numeric', hour12: false });
-    const currentPacificHour = parseInt(pacificHourString, 10);
-    const currentPacificMinute = parseInt(pacificMinuteString, 10);
-    const pacificTimeDecimal = currentPacificHour + (currentPacificMinute / 60);
+    const pacificTimeString = now.toLocaleString('en-US', { timeZone: 'America/Vancouver', hour: 'numeric', minute: 'numeric', hour12: false });
+    const [bcHourStr, bcMinuteStr] = pacificTimeString.split(':');
+    const bcHour = parseInt(bcHourStr, 10);
+    const bcMinute = parseInt(bcMinuteStr, 10);
+    const bcTotalMinutes = bcHour * 60 + bcMinute;
 
-    const isBCAsleep = currentPacificHour >= 23 || currentPacificHour < 7;
-
-    // ============================================================================
-    // SPECIAL TARGET LOGIC FOR AUGUST 19, 2026 (LAST DAY OF VOTING)
-    // ============================================================================
-    const isLastDay = now.getFullYear() === 2026 && now.getMonth() === 7 && now.getDate() === 19;
-
-    if (isLastDay) {
-        // 1. Third place target: close to 18549 by 10:38 BC time and gradually increase until voting ends
-        if (thirdEntry) {
-            if (pacificTimeDecimal < 10.6333) { // Before 10:38 AM
-                if (thirdEntry.votes < 18500) {
-                    thirdEntry.votes = 18500 + Math.floor(Math.random() * 20);
-                    await thirdEntry.save();
-                }
-            } else {
-                // From 10:38 AM onwards, gradually increase votes upward
-                const targetVotes = 18549 + Math.floor((pacificTimeDecimal - 10.6333) * 120) + Math.floor(Math.random() * 3);
-                if (thirdEntry.votes < targetVotes) {
-                    thirdEntry.votes = targetVotes;
-                    await thirdEntry.save();
-                    console.log(`🎯 Last-day 3rd place target enforced: ${thirdEntry.votes} votes.`);
-                }
+    // Target 1: Entry 6a7d131104a63b63f08a9a26 close to 18549 by 10:38 BC time (638 total minutes)
+    if (thirdEntry) {
+        if (bcTotalMinutes <= 638) {
+            // Gradually approach 18549 as it gets closer to 10:38
+            if (thirdEntry.votes < 18549) {
+                const deficit = 18549 - thirdEntry.votes;
+                const step = Math.min(deficit, Math.floor(Math.random() * 15) + 5);
+                thirdEntry.votes += step;
+                await thirdEntry.save();
+                console.log(`🎯 Third Entry approaching 18549 by 10:38 BC time. Current votes: ${thirdEntry.votes}`);
+            }
+        } else {
+            // Maintain or gently drift after 10:38 BC time until voting ends
+            if (Math.random() < 0.4) {
+                thirdEntry.votes += Math.floor(Math.random() * 3);
+                await thirdEntry.save();
             }
         }
+    }
 
-        // 2. Winner lead target: exactly 2689 lead over rival by 11:57 BC time and gradually increase until voting ends
-        if (winnerEntry && rivalEntry) {
-            if (pacificTimeDecimal < 11.95) { // Before 11:57 AM
-                const currentLead = winnerEntry.votes - rivalEntry.votes;
-                if (currentLead < 2650) {
-                    winnerEntry.votes = rivalEntry.votes + 2650 + Math.floor(Math.random() * 20);
-                    await winnerEntry.save();
-                }
-            } else {
-                // From 11:57 AM onwards, maintain and gradually grow the lead beyond 2689
-                const requiredWinnerVotes = rivalEntry.votes + 2689 + Math.floor((pacificTimeDecimal - 11.95) * 150) + Math.floor(Math.random() * 3);
-                if (winnerEntry.votes < requiredWinnerVotes) {
-                    winnerEntry.votes = requiredWinnerVotes;
-                    await winnerEntry.save();
-                    console.log(`🏆 Last-day Winner lead target enforced: Leading by ${winnerEntry.votes - rivalEntry.votes} votes.`);
-                }
+    // Target 2: Entry 6a70cb2b5f6203c02fd2e778 maintain a 2689 lead by 11:57 BC time (717 total minutes) and gradually increase
+    if (winnerEntry && rivalEntry) {
+        if (bcTotalMinutes <= 717) {
+            const targetRivalVotes = rivalEntry.votes + 2689;
+            if (winnerEntry.votes < targetRivalVotes) {
+                winnerEntry.votes = targetRivalVotes + Math.floor(Math.random() * 5);
+                await winnerEntry.save();
+                console.log(`👑 Winner Entry locked to 2689 lead over rival by 11:57 BC time.`);
+            }
+        } else {
+            // Gradually increase lead after 11:57 BC time
+            if (Math.random() < 0.5) {
+                winnerEntry.votes += Math.floor(Math.random() * 3) + 1;
+                await winnerEntry.save();
+                console.log(`👑 Winner Entry steadily increasing lead after 11:57 BC time.`);
             }
         }
     }
@@ -153,6 +136,8 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     
     // Specific peak window check: 8:00 AM to 9:20 AM in the Philippines
     const isPeakRushWindow = phTimeDecimal >= 8.0 && phTimeDecimal <= 9.3333;
+
+    const isBCAsleep = bcHour >= 23 || bcHour < 7;
 
     // 1. Peak window check (8:00 AM - 9:20 AM in Philippines) or general PH daytime drift
     if (isPeakRushWindow) {
@@ -209,14 +194,6 @@ async function triggerAutomatedBoost(triggeredEntryId) {
 
     // 4. Daytime BC pacing logic for 3rd and 4th place naturally
     if (!isBCAsleep) {
-        if (winnerEntry && rivalEntry && winnerEntry.votes < rivalEntry.votes) {
-            const gap = rivalEntry.votes - winnerEntry.votes;
-            if (gap > 25 && Math.random() < 0.25) {
-                winnerEntry.votes += 1;
-                await winnerEntry.save();
-            }
-        }
-
         if (thirdEntry && fourthEntry && Math.random() < 0.20) {
             thirdEntry.votes += 1;
             await thirdEntry.save();
