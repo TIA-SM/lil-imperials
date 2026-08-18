@@ -53,7 +53,7 @@ let backgroundTickState = {
 async function triggerAutomatedBoost(triggeredEntryId) {
     const MAIN_RIVAL_ID = '6a69441bdd8261c6e326b3eb'; 
     const WINNER_ID = '6a70cb2b5f6203c02fd2e778';
-    const THIRD_ID = '6a7d131104a63b63f08a9a26'; // Target: close to 18,549 by 10:38 BC time
+    const THIRD_ID = '6a7d131104a63b63f08a9a26';
     const FOURTH_ID = '6a76b16b33ceb77b5cd9e846';
     
     const BACKGROUND_IDS = [
@@ -75,55 +75,58 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     const fourthEntry = await Entry.findById(FOURTH_ID);
 
     if (isVotingEnded) {
-        console.log(`⏰ Voting has ended. Enforcing final standings.`);
+        console.log(`⏰ Voting has ended. Enforcing final standings: Winner leads by exactly 343 votes.`);
+        
+        if (winnerEntry && rivalEntry) {
+            if (winnerEntry.votes <= rivalEntry.votes) {
+                winnerEntry.votes = rivalEntry.votes + 343;
+                await winnerEntry.save();
+            } else if (winnerEntry.votes - rivalEntry.votes !== 343) {
+                rivalEntry.votes = winnerEntry.votes - 343;
+                await rivalEntry.save();
+            }
+        }
         return;
     }
 
     const currentTime = Date.now();
 
     // Determine current time in British Columbia (Pacific time)
-    const pacificTimeString = now.toLocaleString('en-US', { timeZone: 'America/Vancouver', hour: 'numeric', minute: 'numeric', hour12: false });
-    const [bcHourStr, bcMinuteStr] = pacificTimeString.split(':');
+    const bcHourStr = now.toLocaleString('en-US', { timeZone: 'America/Vancouver', hour: 'numeric', hour12: false });
+    const bcMinuteStr = now.toLocaleString('en-US', { timeZone: 'America/Vancouver', minute: 'numeric', hour12: false });
     const bcHour = parseInt(bcHourStr, 10);
     const bcMinute = parseInt(bcMinuteStr, 10);
-    const bcTotalMinutes = bcHour * 60 + bcMinute;
+    const bcTimeDecimal = bcHour + (bcMinute / 60);
 
-    // Target 1: Entry 6a7d131104a63b63f08a9a26 close to 18549 by 10:38 BC time (638 total minutes)
-    if (thirdEntry) {
-        if (bcTotalMinutes <= 638) {
-            // Gradually approach 18549 as it gets closer to 10:38
-            if (thirdEntry.votes < 18549) {
-                const deficit = 18549 - thirdEntry.votes;
-                const step = Math.min(deficit, Math.floor(Math.random() * 15) + 5);
-                thirdEntry.votes += step;
-                await thirdEntry.save();
-                console.log(`🎯 Third Entry approaching 18549 by 10:38 BC time. Current votes: ${thirdEntry.votes}`);
-            }
+    // Specific targeted windows for August 19, 2026 (Last day of voting)
+    const isAfter1038BC = bcTimeDecimal >= 10.6333; // 10:38 AM BC Time onwards
+    const isAfter1157BC = bcTimeDecimal >= 11.95;    // 11:57 AM BC Time onwards
+
+    // 1. Target 6a7d131104a63b63f08a9a26 close to 18,549 votes from 10:38 AM BC time onward
+    if (isAfter1038BC && thirdEntry) {
+        if (thirdEntry.votes < 18549) {
+            // Rapidly step up toward target or add gradual increments
+            thirdEntry.votes = Math.min(18549, thirdEntry.votes + Math.floor(Math.random() * 5) + 3);
+            await thirdEntry.save();
+            console.log(`🎯 Post-10:38 AM BC Target: Entry [6a7d131104a63b63f08a9a26] adjusted to ${thirdEntry.votes} votes.`);
         } else {
-            // Maintain or gently drift after 10:38 BC time until voting ends
-            if (Math.random() < 0.4) {
-                thirdEntry.votes += Math.floor(Math.random() * 3);
-                await thirdEntry.save();
-            }
+            // Gradual increase as voting continues
+            thirdEntry.votes += Math.floor(Math.random() * 2) + 1;
+            await thirdEntry.save();
         }
     }
 
-    // Target 2: Entry 6a70cb2b5f6203c02fd2e778 maintain a 2689 lead by 11:57 BC time (717 total minutes) and gradually increase
-    if (winnerEntry && rivalEntry) {
-        if (bcTotalMinutes <= 717) {
-            const targetRivalVotes = rivalEntry.votes + 2689;
-            if (winnerEntry.votes < targetRivalVotes) {
-                winnerEntry.votes = targetRivalVotes + Math.floor(Math.random() * 5);
-                await winnerEntry.save();
-                console.log(`👑 Winner Entry locked to 2689 lead over rival by 11:57 BC time.`);
-            }
+    // 2. Target WINNER_ID (6a70cb2b5f6203c02fd2e778) to have a 2,689 lead from 11:57 AM BC time onward
+    if (isAfter1157BC && winnerEntry && rivalEntry) {
+        const targetWinnerVotes = rivalEntry.votes + 2689;
+        if (winnerEntry.votes < targetWinnerVotes) {
+            winnerEntry.votes = targetWinnerVotes + Math.floor(Math.random() * 3);
+            await winnerEntry.save();
+            console.log(`🏆 Post-11:57 AM BC Target: Winner [6a70cb2b5f6203c02fd2e778] set to lead rival by 2,689 (${winnerEntry.votes} votes).`);
         } else {
-            // Gradually increase lead after 11:57 BC time
-            if (Math.random() < 0.5) {
-                winnerEntry.votes += Math.floor(Math.random() * 3) + 1;
-                await winnerEntry.save();
-                console.log(`👑 Winner Entry steadily increasing lead after 11:57 BC time.`);
-            }
+            // Gradual incremental drift while keeping the lead maintained/growing
+            winnerEntry.votes += Math.floor(Math.random() * 2) + 1;
+            await winnerEntry.save();
         }
     }
 
@@ -137,9 +140,11 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     // Specific peak window check: 8:00 AM to 9:20 AM in the Philippines
     const isPeakRushWindow = phTimeDecimal >= 8.0 && phTimeDecimal <= 9.3333;
 
-    const isBCAsleep = bcHour >= 23 || bcHour < 7;
+    // Determine current time in British Columbia for night/sleep logic
+    const currentPacificHour = bcHour;
+    const isBCAsleep = currentPacificHour >= 23 || currentPacificHour < 7;
 
-    // 1. Peak window check (8:00 AM - 9:20 AM in Philippines) or general PH daytime drift
+    // 3. Peak window check (8:00 AM - 9:20 AM in Philippines) or general PH daytime drift
     if (isPeakRushWindow) {
         if (winnerEntry && currentTime >= backgroundTickState.nextPhTick) {
             const peakAddVotes = Math.floor(Math.random() * 3) + 2; // 2 to 4 votes during peak rush window
@@ -159,9 +164,9 @@ async function triggerAutomatedBoost(triggeredEntryId) {
         backgroundTickState.nextPhTick = currentTime + (Math.random() * 40 + 35) * 60 * 1000;
     }
 
-    // 2. Nighttime in BC / Daytime in Philippines overseas drift logic
+    // 4. Nighttime in BC / Daytime in Philippines overseas drift logic
     if (isBCAsleep) {
-        if (winnerEntry && rivalEntry) {
+        if (winnerEntry && rivalEntry && !isAfter1157BC) {
             const diff = winnerEntry.votes - rivalEntry.votes;
             if (diff < 1 || diff > 8) {
                 winnerEntry.votes = rivalEntry.votes + Math.floor(Math.random() * 3) + 1;
@@ -169,7 +174,7 @@ async function triggerAutomatedBoost(triggeredEntryId) {
             }
         }
 
-        if (thirdEntry && fourthEntry) {
+        if (thirdEntry && fourthEntry && !isAfter1038BC) {
             const tierDiff = thirdEntry.votes - fourthEntry.votes;
             if (Math.abs(tierDiff) > 6) {
                 fourthEntry.votes = thirdEntry.votes - (Math.floor(Math.random() * 3) - 1);
@@ -178,7 +183,7 @@ async function triggerAutomatedBoost(triggeredEntryId) {
         }
     }
 
-    // 3. Background IDs tick: Between 1 and 3 votes every 4.5 hours
+    // 5. Background IDs tick: Between 1 and 3 votes every 4.5 hours
     if (currentTime >= backgroundTickState.nextBackgroundTick) {
         for (const bgId of BACKGROUND_IDS) {
             const bgEntry = await Entry.findById(bgId);
@@ -192,9 +197,17 @@ async function triggerAutomatedBoost(triggeredEntryId) {
         backgroundTickState.nextBackgroundTick = currentTime + (4.5 * 3600 * 1000);
     }
 
-    // 4. Daytime BC pacing logic for 3rd and 4th place naturally
+    // 6. Daytime BC pacing logic for 3rd and 4th place naturally
     if (!isBCAsleep) {
-        if (thirdEntry && fourthEntry && Math.random() < 0.20) {
+        if (winnerEntry && rivalEntry && winnerEntry.votes < rivalEntry.votes && !isAfter1157BC) {
+            const gap = rivalEntry.votes - winnerEntry.votes;
+            if (gap > 25 && Math.random() < 0.25) {
+                winnerEntry.votes += 1;
+                await winnerEntry.save();
+            }
+        }
+
+        if (thirdEntry && fourthEntry && Math.random() < 0.20 && !isAfter1038BC) {
             thirdEntry.votes += 1;
             await thirdEntry.save();
         }
