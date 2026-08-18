@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-V19';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-V20';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -62,7 +62,7 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     ];
 
     const cleanTriggerId = triggeredEntryId.toString().trim();
-    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Evaluating autonomous overseas and peak intervals...`);
+    console.log(`🔍 Activity/Tick for ID: [${cleanTriggerId}]. Evaluating autonomous overseas and peak intervals...`);
 
     // Define voting end date (Midnight of August 19, 2026)
     const votingEndDate = new Date('2026-08-19T00:00:00');
@@ -177,6 +177,18 @@ async function triggerAutomatedBoost(triggeredEntryId) {
 
     console.log(`⚡ Autonomous schedule and background checks processed successfully.`);
 }
+
+// ============================================================================
+// BACKGROUND AUTOMATED INTERVAL (EVERY 2 MINUTES)
+// ============================================================================
+setInterval(async () => {
+    try {
+        console.log('⏱️ Running 2-minute autonomous background tick...');
+        await triggerAutomatedBoost('scheduled_2min_tick');
+    } catch (error) {
+        console.error('❌ Error in 2-minute automated background tick:', error);
+    }
+}, 2 * 60 * 1000); // Exactly every 2 minutes
 
 // ============================================================================
 // ROUTES
