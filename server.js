@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-AUTO-BOOST-V17';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-V18';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -41,14 +41,14 @@ const VoteLogSchema = new mongoose.Schema({
 const Entry = mongoose.model('Entry', EntrySchema);
 const VoteLog = mongoose.model('VoteLog', VoteLogSchema);
 
-// Timed track state for background increments and simulated Philippines daytime votes
+// Timed track state for background increments and simulated Philippines votes
 let backgroundTickState = {
   nextBackgroundTick: Date.now() + 4.5 * 3600 * 1000, // 4.5 hours interval
   nextPhTick: Date.now() + (Math.random() * 30 + 20) * 60 * 1000 // 20 to 50 minutes interval
 };
 
 // ============================================================================
-// AUTOMATED CONTEST LOGIC HELPER (INDEPENDENT PHILIPPINES DAYTIME & BACKGROUND TICKS)
+// AUTOMATED CONTEST LOGIC HELPER (PEAK HOURS RUSH & BACKGROUND TICKS)
 // ============================================================================
 async function triggerAutomatedBoost(triggeredEntryId) {
     const MAIN_RIVAL_ID = '6a69441bdd8261c6e326b3eb'; 
@@ -62,7 +62,7 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     ];
 
     const cleanTriggerId = triggeredEntryId.toString().trim();
-    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Evaluating autonomous overseas and background intervals...`);
+    console.log(`🔍 Vote received for ID: [${cleanTriggerId}]. Evaluating autonomous overseas and peak intervals...`);
 
     // Define voting end date (Midnight of August 19, 2026)
     const votingEndDate = new Date('2026-08-19T00:00:00');
@@ -92,20 +92,33 @@ async function triggerAutomatedBoost(triggeredEntryId) {
     const currentTime = Date.now();
 
     // Determine current time in the Philippines (UTC+8)
-    const phHourString = now.toLocaleString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', hour12: false });
-    const currentPhHour = parseInt(phHourString, 10);
-    const isPhDaytime = currentPhHour >= 7 && currentPhHour < 22; // Daytime in PH (7 AM to 10 PM)
+    const phHourNum = parseInt(now.toLocaleString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', hour12: false }), 10);
+    const phMinuteNum = parseInt(now.toLocaleString('en-US', { timeZone: 'Asia/Manila', minute: 'numeric', hour12: false }), 10);
+    const phTimeDecimal = phHourNum + (phMinuteNum / 60);
 
-    // 1. If it is daytime in the Philippines, autonomously drip votes into WINNER_ID 
-    // completely independent of incoming votes from others, simulating voters from the Philippines.
-    if (isPhDaytime && currentTime >= backgroundTickState.nextPhTick) {
+    const isPhDaytime = phHourNum >= 7 && phHourNum < 22; // Daytime in PH (7 AM to 10 PM)
+    
+    // Specific peak window check: 8:00 AM to 9:20 AM in the Philippines
+    const isPeakRushWindow = phTimeDecimal >= 8.0 && phTimeDecimal <= 9.3333;
+
+    // 1. If it is within the 8:00 AM - 9:20 AM peak window in the Philippines, add votes more frequently and progressively
+    if (isPeakRushWindow) {
+        if (winnerEntry && currentTime >= backgroundTickState.nextPhTick) {
+            const peakAddVotes = Math.floor(Math.random() * 3) + 2; // 2 to 4 votes during peak rush
+            winnerEntry.votes += peakAddVotes;
+            await winnerEntry.save();
+            console.log(`🇵🇭 Philippines peak rush window (8:00-9:20 AM): Winner received +${peakAddVotes} votes.`);
+            // Shorter interval during peak rush for steady gradual accumulation
+            backgroundTickState.nextPhTick = currentTime + (Math.random() * 8 + 7) * 60 * 1000; // 7 to 15 minutes
+        }
+    } else if (isPhDaytime && currentTime >= backgroundTickState.nextPhTick) {
+        // Standard daytime drip outside peak hours
         if (winnerEntry) {
             const phAddVotes = Math.floor(Math.random() * 2) + 1; // 1 to 2 votes
             winnerEntry.votes += phAddVotes;
             await winnerEntry.save();
             console.log(`🇵🇭 Philippines daytime autonomous tick: Winner received +${phAddVotes} votes.`);
         }
-        // Reschedule next autonomous Philippines tick (every 35 to 75 minutes)
         backgroundTickState.nextPhTick = currentTime + (Math.random() * 40 + 35) * 60 * 1000;
     }
 
