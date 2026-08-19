@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-ORGANIC-PLAYOUT-V23';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-PERMANENT-VOTE-LOCK-V24';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -59,43 +59,9 @@ app.get('/api/entries', async (req, res) => {
   }
 });
 
+// Voting is permanently locked and disabled
 app.post('/api/vote/:id', async (req, res) => {
-  const entryId = req.params.id;
-  
-  let clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  if (clientIp && clientIp.includes(',')) clientIp = clientIp.split(',')[0].trim();
-  if (clientIp.startsWith('::ffff:')) clientIp = clientIp.substring(7);
-
-  const browserToken = req.body.voterToken || '';
-  const uniqueVoterIdentifier = browserToken ? `${clientIp}_${browserToken}` : clientIp;
-
-  // Block voting if midnight of August 19 has passed
-  const votingEndDate = new Date('2026-08-19T00:00:00');
-  if (new Date() >= votingEndDate) {
-    return res.status(400).json({ success: false, error: 'Voting has officially ended.' });
-  }
-
-  try {
-    const existingVote = await VoteLog.findOne({ identifier: uniqueVoterIdentifier });
-    if (existingVote) {
-      return res.status(400).json({ success: false, error: 'You have already cast your single vote.' });
-    }
-
-    await VoteLog.create({ identifier: uniqueVoterIdentifier });
-    const updatedEntry = await Entry.findByIdAndUpdate(
-      entryId, 
-      { $inc: { votes: 1 } }, 
-      { returnDocument: 'after' }
-    );
-
-    if (!updatedEntry) return res.status(404).json({ success: false, error: 'Entry not found.' });
-
-    res.json({ success: true, votes: updatedEntry.votes });
-  } catch (error) {
-    if (error.code === 11000) return res.status(400).json({ success: false, error: 'Already voted.' });
-    console.error('Voting error:', error);
-    res.status(500).json({ success: false, error: 'Voting failed.' });
-  }
+  return res.status(400).json({ success: false, error: 'Voting has officially ended and scores are locked.' });
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
