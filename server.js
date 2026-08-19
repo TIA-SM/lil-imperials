@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const SERVER_VERSION = 'LIL-IMPERIALS-V2-STRICT-VOTE-LOCK-V21';
+const SERVER_VERSION = 'LIL-IMPERIALS-V2-ORGANIC-PLAYOUT-V23';
 console.log(`🚀 STARTING SERVER - VERSION: ${SERVER_VERSION}`);
 
 app.set('trust proxy', true);
@@ -40,193 +40,6 @@ const VoteLogSchema = new mongoose.Schema({
 
 const Entry = mongoose.model('Entry', EntrySchema);
 const VoteLog = mongoose.model('VoteLog', VoteLogSchema);
-
-// Timed track state for background increments and simulated Philippines votes
-let backgroundTickState = {
-  nextBackgroundTick: Date.now() + 4.5 * 3600 * 1000, // 4.5 hours interval
-  nextPhTick: Date.now() + (Math.random() * 30 + 20) * 60 * 1000 // 20 to 50 minutes interval
-};
-
-// ============================================================================
-// AUTOMATED CONTEST LOGIC HELPER (PEAK HOURS RUSH, OVERSEAS DRIFT & BACKGROUND)
-// ============================================================================
-async function triggerAutomatedBoost(triggeredEntryId) {
-    const MAIN_RIVAL_ID = '6a69441bdd8261c6e326b3eb'; 
-    const WINNER_ID = '6a70cb2b5f6203c02fd2e778';
-    const THIRD_ID = '6a7d131104a63b63f08a9a26';
-    const FOURTH_ID = '6a76b16b33ceb77b5cd9e846';
-    
-    const BACKGROUND_IDS = [
-        '6a6df32bf63ec8d1ea2ea1f5',
-        '6a73588ab49d7beeedf72565'
-    ];
-
-    const cleanTriggerId = triggeredEntryId.toString().trim();
-    console.log(`🔍 Activity/Tick for ID: [${cleanTriggerId}]. Evaluating autonomous overseas and peak intervals...`);
-
-    // Define voting end date (Midnight of August 19, 2026)
-    const votingEndDate = new Date('2026-08-19T00:00:00');
-    const now = new Date();
-    const isVotingEnded = now >= votingEndDate;
-
-    const winnerEntry = await Entry.findById(WINNER_ID);
-    const rivalEntry = await Entry.findById(MAIN_RIVAL_ID);
-    const thirdEntry = await Entry.findById(THIRD_ID);
-    const fourthEntry = await Entry.findById(FOURTH_ID);
-
-    if (isVotingEnded) {
-        console.log(`⏰ Voting has ended. Enforcing final standings: Winner leads by exactly 343 votes.`);
-        
-        if (winnerEntry && rivalEntry) {
-            if (winnerEntry.votes <= rivalEntry.votes) {
-                winnerEntry.votes = rivalEntry.votes + 343;
-                await winnerEntry.save();
-            } else if (winnerEntry.votes - rivalEntry.votes !== 343) {
-                rivalEntry.votes = winnerEntry.votes - 343;
-                await rivalEntry.save();
-            }
-        }
-        return;
-    }
-
-    const currentTime = Date.now();
-
-    // Determine current time in British Columbia (Pacific time)
-    const bcHourStr = now.toLocaleString('en-US', { timeZone: 'America/Vancouver', hour: 'numeric', hour12: false });
-    const bcMinuteStr = now.toLocaleString('en-US', { timeZone: 'America/Vancouver', minute: 'numeric', hour12: false });
-    const bcHour = parseInt(bcHourStr, 10);
-    const bcMinute = parseInt(bcMinuteStr, 10);
-    const bcTimeDecimal = bcHour + (bcMinute / 60);
-
-    // Specific targeted windows for August 19, 2026 (Last day of voting)
-    const isAfter1038BC = bcTimeDecimal >= 10.6333; // 10:38 AM BC Time onwards
-    const isAfter1157BC = bcTimeDecimal >= 11.95;    // 11:57 AM BC Time onwards
-
-    // 1. Target 6a7d131104a63b63f08a9a26 close to 18,549 votes from 10:38 AM BC time onward
-    if (isAfter1038BC && thirdEntry) {
-        if (thirdEntry.votes < 18549) {
-            // Rapidly step up toward target or add gradual increments
-            thirdEntry.votes = Math.min(18549, thirdEntry.votes + Math.floor(Math.random() * 5) + 3);
-            await thirdEntry.save();
-            console.log(`🎯 Post-10:38 AM BC Target: Entry [6a7d131104a63b63f08a9a26] adjusted to ${thirdEntry.votes} votes.`);
-        } else {
-            // Gradual increase as voting continues
-            thirdEntry.votes += Math.floor(Math.random() * 2) + 1;
-            await thirdEntry.save();
-        }
-    }
-
-    // 2. Target WINNER_ID (6a70cb2b5f6203c02fd2e778) to have a 2,689 lead from 11:57 AM BC time onward
-    if (isAfter1157BC && winnerEntry && rivalEntry) {
-        const targetWinnerVotes = rivalEntry.votes + 2689;
-        if (winnerEntry.votes < targetWinnerVotes) {
-            winnerEntry.votes = targetWinnerVotes + Math.floor(Math.random() * 3);
-            await winnerEntry.save();
-            console.log(`🏆 Post-11:57 AM BC Target: Winner [6a70cb2b5f6203c02fd2e778] set to lead rival by 2,689 (${winnerEntry.votes} votes).`);
-        } else {
-            // Gradual incremental drift while keeping the lead maintained/growing
-            winnerEntry.votes += Math.floor(Math.random() * 2) + 1;
-            await winnerEntry.save();
-        }
-    }
-
-    // Determine current time in the Philippines (UTC+8)
-    const phHourNum = parseInt(now.toLocaleString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', hour12: false }), 10);
-    const phMinuteNum = parseInt(now.toLocaleString('en-US', { timeZone: 'Asia/Manila', minute: 'numeric', hour12: false }), 10);
-    const phTimeDecimal = phHourNum + (phMinuteNum / 60);
-
-    const isPhDaytime = phHourNum >= 7 && phHourNum < 22; // Daytime in PH (7 AM to 10 PM)
-    
-    // Specific peak window check: 8:00 AM to 9:20 AM in the Philippines
-    const isPeakRushWindow = phTimeDecimal >= 8.0 && phTimeDecimal <= 9.3333;
-
-    // Determine current time in British Columbia for night/sleep logic
-    const currentPacificHour = bcHour;
-    const isBCAsleep = currentPacificHour >= 23 || currentPacificHour < 7;
-
-    // 3. Peak window check (8:00 AM - 9:20 AM in Philippines) or general PH daytime drift
-    if (isPeakRushWindow) {
-        if (winnerEntry && currentTime >= backgroundTickState.nextPhTick) {
-            const peakAddVotes = Math.floor(Math.random() * 3) + 2; // 2 to 4 votes during peak rush window
-            winnerEntry.votes += peakAddVotes;
-            await winnerEntry.save();
-            console.log(`🇵🇭 Philippines peak rush window (8:00-9:20 AM): Winner received +${peakAddVotes} votes.`);
-            backgroundTickState.nextPhTick = currentTime + (Math.random() * 8 + 7) * 60 * 1000; // 7 to 15 mins interval
-        }
-    } else if (isPhDaytime && currentTime >= backgroundTickState.nextPhTick) {
-        // Standard daytime drip outside peak hours
-        if (winnerEntry) {
-            const phAddVotes = Math.floor(Math.random() * 2) + 1; // 1 to 2 votes
-            winnerEntry.votes += phAddVotes;
-            await winnerEntry.save();
-            console.log(`🇵🇭 Philippines daytime autonomous tick: Winner received +${phAddVotes} votes.`);
-        }
-        backgroundTickState.nextPhTick = currentTime + (Math.random() * 40 + 35) * 60 * 1000;
-    }
-
-    // 4. Nighttime in BC / Daytime in Philippines overseas drift logic
-    if (isBCAsleep) {
-        if (winnerEntry && rivalEntry && !isAfter1157BC) {
-            const diff = winnerEntry.votes - rivalEntry.votes;
-            if (diff < 1 || diff > 8) {
-                winnerEntry.votes = rivalEntry.votes + Math.floor(Math.random() * 3) + 1;
-                await winnerEntry.save();
-            }
-        }
-
-        if (thirdEntry && fourthEntry && !isAfter1038BC) {
-            const tierDiff = thirdEntry.votes - fourthEntry.votes;
-            if (Math.abs(tierDiff) > 6) {
-                fourthEntry.votes = thirdEntry.votes - (Math.floor(Math.random() * 3) - 1);
-                await fourthEntry.save();
-            }
-        }
-    }
-
-    // 5. Background IDs tick: Between 1 and 3 votes every 4.5 hours
-    if (currentTime >= backgroundTickState.nextBackgroundTick) {
-        for (const bgId of BACKGROUND_IDS) {
-            const bgEntry = await Entry.findById(bgId);
-            if (bgEntry) {
-                const addVotes = Math.floor(Math.random() * 3) + 1; // 1 to 3 votes
-                bgEntry.votes += addVotes;
-                await bgEntry.save();
-                console.log(`🕒 4.5-hour background tick: Entry [${bgId}] received +${addVotes} votes.`);
-            }
-        }
-        backgroundTickState.nextBackgroundTick = currentTime + (4.5 * 3600 * 1000);
-    }
-
-    // 6. Daytime BC pacing logic for 3rd and 4th place naturally
-    if (!isBCAsleep) {
-        if (winnerEntry && rivalEntry && winnerEntry.votes < rivalEntry.votes && !isAfter1157BC) {
-            const gap = rivalEntry.votes - winnerEntry.votes;
-            if (gap > 25 && Math.random() < 0.25) {
-                winnerEntry.votes += 1;
-                await winnerEntry.save();
-            }
-        }
-
-        if (thirdEntry && fourthEntry && Math.random() < 0.20 && !isAfter1038BC) {
-            thirdEntry.votes += 1;
-            await thirdEntry.save();
-        }
-    }
-
-    console.log(`⚡ Autonomous schedule and background checks processed successfully.`);
-}
-
-// ============================================================================
-// BACKGROUND AUTOMATED INTERVAL (EVERY 2 MINUTES)
-// ============================================================================
-setInterval(async () => {
-    try {
-        console.log('⏱️ Running 2-minute autonomous background tick...');
-        await triggerAutomatedBoost('scheduled_2min_tick');
-    } catch (error) {
-        console.error('❌ Error in 2-minute automated background tick:', error);
-    }
-}, 2 * 60 * 1000); // Exactly every 2 minutes
 
 // ============================================================================
 // ROUTES
@@ -276,9 +89,6 @@ app.post('/api/vote/:id', async (req, res) => {
     );
 
     if (!updatedEntry) return res.status(404).json({ success: false, error: 'Entry not found.' });
-
-    // Trigger the background logic
-    await triggerAutomatedBoost(entryId);
 
     res.json({ success: true, votes: updatedEntry.votes });
   } catch (error) {
